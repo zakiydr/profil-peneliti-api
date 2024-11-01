@@ -9,9 +9,9 @@ def set_proxy():
         max_attempts = 3
         
         while attempt <= max_attempts:
+            proxy = FreeProxy(rand=True, timeout=5, ).get()
             try:
                 pg = ProxyGenerator()
-                proxy = FreeProxy(rand=True, timeout=5).get()
                 proxy_setup = pg.SingleProxy(http=proxy, https=proxy)
                 if proxy_setup:
                     print(f"Sucessfully set proxy: {proxy}")

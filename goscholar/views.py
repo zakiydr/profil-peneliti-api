@@ -23,27 +23,20 @@ def get_authors(request):
         #         {"error": "Failed to set up proxy connection"}, 
         #         status=status.HTTP_503_SERVICE_UNAVAILABLE
         #     )
-        try:
-            search_query = scholarly.search_author(author_name)
-            authors = []
-            limit = int(request.GET.get('limit'))
-            
-            for i, author in enumerate(search_query):
-                if i >= limit:
-                    break
-                authors.append(author)
+        
+        search_query = scholarly.search_author(author_name)
+        authors = []
+        limit = int(request.GET.get('limit'))
+        
+        for i, author in enumerate(search_query):
+            if i >= limit:
+                break
+            authors.append(author)
+        return Response({
+            "authors": authors,
+            "count": len(authors)
+        }, status=status.HTTP_200_OK)
 
-            return Response({
-                "authors": authors,
-                "count": len(authors)
-            }, status=status.HTTP_200_OK)
-
-        except StopIteration:
-            return Response({
-                "authors": [],
-                "message": "No authors found"
-            }, status=status.HTTP_404_NOT_FOUND)
-            
     except Exception as e:
         return Response(
             {'error': f'Unexpected error: {str(e)}'}, 

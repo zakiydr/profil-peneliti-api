@@ -28,10 +28,14 @@ def get_authors(request):
         authors = []
         limit = int(request.GET.get('limit'))
         
-        for i, author in enumerate(search_query):
-            if i >= limit:
-                break
-            authors.append(author)
+        if limit is None:
+            for author in search_query:
+                authors.append(author)
+        else:
+            for i, author in enumerate(search_query):
+                if i >= limit:
+                    break
+                authors.append(author)
         return Response({
             "authors": authors,
             "count": len(authors)

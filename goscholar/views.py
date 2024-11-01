@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from rest_framework import status
 
 # Initialize proxy settings
-set_proxy()
+# set_proxy()
 
 @api_view(["GET"])
 def get_authors(request):
@@ -19,11 +19,11 @@ def get_authors(request):
             )
 
         # Set up proxy before searching
-        if not set_proxy():
-            return Response(
-                {"error": "Failed to set up proxy connection"}, 
-                status=status.HTTP_503_SERVICE_UNAVAILABLE
-            )
+        # if not set_proxy():
+        #     return Response(
+        #         {"error": "Failed to set up proxy connection"}, 
+        #         status=status.HTTP_503_SERVICE_UNAVAILABLE
+        #     )
 
         # Search for the author
         try:

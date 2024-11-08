@@ -4,34 +4,46 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
 
+from django.core.paginator import Paginator
+
 # Initialize proxy settings
 # set_proxy()
 
 @api_view(["GET"])
 def get_authors(request):
+    
+    author_name = request.GET.get('author')
+    limit = request.GET.get('limit')
+    page = request.GET.get('page')
+    p = Paginator(search_query, limit)
+    page_index = p.get_page(page)
+    search_query = scholarly.search_author(author_name)
+
     try:
-        author_name = request.GET.get('author')
         if not author_name:
             return Response(
                 {"error": "Author parameter is required"}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
+            
 
         # Set up proxy before searching
-        # if not set_proxy():
+        # if not set_proxy(): 
         #     return Response(
         #         {"error": "Failed to set up proxy connection"}, 
         #         status=status.HTTP_503_SERVICE_UNAVAILABLE
         #     )
         
-        search_query = scholarly.search_author(author_name)
         authors = []
-        limit = int(request.GET.get('limit'))
         
-        for i, author in enumerate(search_query):
-            if i >= limit:
-                break
-            authors.append(author)
+        if limit is None:
+            for author in search_query:
+                authors.append(author)
+        else:
+            for i, author in enumerate(search_query):
+                if i >= limit:
+                    break
+                authors.append(author)
         return Response({
             "authors": authors,
             "count": len(authors)
@@ -39,7 +51,7 @@ def get_authors(request):
 
     except Exception as e:
         return Response(
-            {'error': f'Unexpected error: {str(e)}'}, 
+            {'error': {str(e)}}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
         

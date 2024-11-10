@@ -8,7 +8,7 @@ from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 
 
 
-
+@api_view(['GET'])
 def get_authors(request):
     author_name = request.GET.get('author')
     limit = request.GET.get('limit', 10)  
@@ -22,11 +22,13 @@ def get_authors(request):
             {"error": "Invalid limit or page parameter"}, 
             status=status.HTTP_400_BAD_REQUEST
         )
-
+        
+    
+    
     try:
         if not author_name:
             return Response(
-                {"error": "Author parameter is required"}, 
+                {"error": "Search parameter is required"}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -35,8 +37,10 @@ def get_authors(request):
         
         
         authors = list(search_query)
-
         
+        # for author in search_query:
+        #     authors.append(author)
+
         paginator = Paginator(authors, limit)
 
         try:
@@ -56,7 +60,7 @@ def get_authors(request):
             "current_page": page,
             "next_page": current_page.next_page_number() if current_page.has_next() else None,
             "previous_page": current_page.previous_page_number() if current_page.has_previous() else None,
-            "authors": list(current_page.object_list)
+            "authors": current_page.object_list
         }
 
         return Response(response_data, status=status.HTTP_200_OK)

@@ -65,7 +65,9 @@ def get_authors(request):
             "authors": current_page.object_list
         }
         
-        json_data = json.dumps(response_data) 
+        json_dumps = json.dumps(response_data)
+        
+        json_data = json.loads(json_dumps) 
 
         return Response(json_data, status=status.HTTP_200_OK)
 

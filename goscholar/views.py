@@ -4,20 +4,24 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
 
-from django.core.paginator import Paginator
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 
-# Initialize proxy settings
-# set_proxy()
 
-@api_view(["GET"])
+
+
 def get_authors(request):
-    
     author_name = request.GET.get('author')
-    limit = request.GET.get('limit')
-    page = request.GET.get('page')
-    p = Paginator(search_query, limit)
-    page_index = p.get_page(page)
-    search_query = scholarly.search_author(author_name)
+    limit = request.GET.get('limit', 10)  
+    page = request.GET.get('page', 1)
+    
+    try:
+        limit = int(limit)
+        page = int(page)
+    except (TypeError, ValueError):
+        return Response(
+            {"error": "Invalid limit or page parameter"}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
     try:
         if not author_name:
@@ -25,35 +29,44 @@ def get_authors(request):
                 {"error": "Author parameter is required"}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
-            
 
-        # Set up proxy before searching
-        # if not set_proxy(): 
-        #     return Response(
-        #         {"error": "Failed to set up proxy connection"}, 
-        #         status=status.HTTP_503_SERVICE_UNAVAILABLE
-        #     )
         
-        authors = []
+        search_query = scholarly.search_author(author_name)
         
-        if limit is None:
-            for author in search_query:
-                authors.append(author)
-        else:
-            for i, author in enumerate(search_query):
-                if i >= limit:
-                    break
-                authors.append(author)
-        return Response({
-            "authors": authors,
-            "count": len(authors)
-        }, status=status.HTTP_200_OK)
+        
+        authors = list(search_query)
+
+        
+        paginator = Paginator(authors, limit)
+
+        try:
+            
+            current_page = paginator.page(page)
+        except PageNotAnInteger:
+            
+            current_page = paginator.page(1)
+        except EmptyPage:
+            
+            current_page = paginator.page(paginator.num_pages)
+
+        
+        response_data = {
+            "count": len(authors),
+            "total_pages": paginator.num_pages,
+            "current_page": page,
+            "next_page": current_page.next_page_number() if current_page.has_next() else None,
+            "previous_page": current_page.previous_page_number() if current_page.has_previous() else None,
+            "authors": list(current_page.object_list)
+        }
+
+        return Response(response_data, status=status.HTTP_200_OK)
 
     except Exception as e:
         return Response(
-            {'error': {str(e)}}, 
+            {'error': str(e)}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
         
 @api_view(["GET"])
 def get_author_by_id(request, id):
@@ -66,4 +79,5 @@ def get_author_by_id(request, id):
         return Response(author_detail, status=status.HTTP_200_OK)
     except Exception as e:
         return Response({"error": f'Unexpected error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
         

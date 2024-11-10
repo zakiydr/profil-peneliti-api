@@ -3,8 +3,10 @@ from scholarly import scholarly
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
+import json
 
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+from django.core import serializers
 
 
 
@@ -62,8 +64,10 @@ def get_authors(request):
             "previous_page": current_page.previous_page_number() if current_page.has_previous() else None,
             "authors": current_page.object_list
         }
+        
+        json_data = json.dumps(response_data) 
 
-        return Response(response_data, status=status.HTTP_200_OK)
+        return Response(json_data, status=status.HTTP_200_OK)
 
     except Exception as e:
         return Response(

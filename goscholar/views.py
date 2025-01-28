@@ -8,8 +8,45 @@ from rest_framework.response import Response
 from rest_framework import status
 import json
 
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.views import APIView
+from rest_framework_simplejwt.tokens import RefreshToken
+from django.contrib.auth import get_user_model
+from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
+from allauth.socialaccount.providers.oauth2.client import OAuth2Client
+from dj_rest_auth.registration.views import SocialLoginView
+
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.core import serializers
+
+class GoogleLogin(SocialLoginView):
+    adapter_class = GoogleOAuth2Adapter
+    client_class = OAuth2Client
+
+@api_view(['GET'])
+def get_current_user(request):
+    if request.user.is_authenticated:
+        user = {
+            'email': request.user.email,
+            'name': f"{request.user.first_name} {request.user.last_name}",
+            'profile_picture': request.user.profile_picture
+        }
+        return Response(user)
+    return Response({'error': 'Not authenticated'}, status=401)
+
+class LogoutView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            refresh_token = request.data["refresh_token"]
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+            return Response(status=204)
+        except Exception as e:
+            return Response({'error': str(e)}, status=400)
+
+
 
 @api_view(['GET'])
 # @rotate_proxy

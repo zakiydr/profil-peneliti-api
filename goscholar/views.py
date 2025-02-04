@@ -87,12 +87,11 @@ def get_authors_compact(request):
             if len(authors) >= 10:
                 break
 
-        # response_data = {
-        #     "count": len(authors),
-        #     "results": authors
-        # }
+        response_data = {
+            "authors": authors
+        }
 
-        return Response(authors, status=status.HTTP_200_OK)
+        return Response(response_data, status=status.HTTP_200_OK)
 
     except Exception as e:
         return Response(

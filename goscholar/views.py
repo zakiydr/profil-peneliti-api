@@ -67,6 +67,62 @@ def get_authors(request):
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
         
+@api_view(['GET'])
+def get_authors_compact(request):
+    try:
+        author_name = request.GET.get('author')
+
+        if not author_name:
+            return Response(
+                {"error": "Search parameter is required"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        search_query = scholarly.search_author(author_name)
+
+        
+        authors = []
+        for author in search_query:
+            authors.append(author)
+            if len(authors) >= 10:
+                break
+
+        # response_data = {
+        #     "count": len(authors),
+        #     "results": authors
+        # }
+
+        return Response(authors, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        return Response(
+            {'error': str(e)}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+        
+@api_view(['GET'])
+def get_author_by_google(request):
+    try:
+        author = request.GET.get('author')
+
+        if not author:
+            return Response(
+                {"error": "Search parameter is required"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        search_query = scholarly.search_author(author)
+        
+        result = scholarly.fill(next(search_query))
+
+        return Response(result, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        return Response(
+            {'error': str(e)}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )        
+        
 @api_view(["GET"])
 # @rotate_proxy
 def get_author_by_id(request, id):
@@ -80,6 +136,8 @@ def get_author_by_id(request, id):
         return Response(author_detail, status=status.HTTP_200_OK) 
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+
     
 @api_view(["GET"])
 # @rotate_proxy

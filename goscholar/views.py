@@ -12,7 +12,6 @@ from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.core import serializers
 
 @api_view(['GET'])
-# @rotate_proxy
 def get_authors(request):
     author_name = request.GET.get('author')
     limit = request.GET.get('limit', 10)  
@@ -100,7 +99,7 @@ def get_authors_compact(request):
         )
         
 @api_view(['GET'])
-def get_author_by_google(request):
+def get_author_by_name(request):
     try:
         author = request.GET.get('author')
 
@@ -160,3 +159,59 @@ def get_author_detail(request, id):
         return Response(response_data, status=status.HTTP_200_OK)
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    
+@api_view(["GET"])
+def get_pub_detail(request, query):
+    try:
+        pub_query = scholarly.search_pubs(query)
+        
+        pub = next(pub_query)
+        
+        pub_detail = scholarly.fill(next(pub_query))
+        
+        return Response(pub, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response(exception=str(e), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    
+# @api_view(["GET"])
+# def get_pub_detail(request, query):
+#     try:
+#         # Search for publications matching the query
+#         pub_query = scholarly.search_pubs(query)
+#         # Get the first publication from the search results
+#         pub = next(pub_query)
+#         # Fill in the details of the publication
+#         pub_detail = scholarly.fill(pub)
+        
+#         # Retrieve publications that have cited the publication
+#         citations_generator = scholarly.citedby(pub_detail)
+        
+#         # Process each citing publication and fill in details
+#         citations = []
+#         for citation in citations_generator:
+#             filled_citation = scholarly.fill(citation)
+#             citations.append(filled_citation)
+        
+#         # Group citations by publication year (if available)
+#         citations_by_year = {}
+#         for citation in citations:
+#             # Attempt to get the publication year from the 'bib' field
+#             year = citation.get("bib", {}).get("pub_year")
+#             if year:
+#                 citations_by_year.setdefault(year, []).append(citation)
+        
+#         # Optionally, sort the dictionary by year
+#         sorted_citations_by_year = {year: citations_by_year[year] for year in sorted(citations_by_year)}
+        
+#         # Construct the response data
+#         result = {
+#             "pub_detail": pub_detail,
+#             "citations_by_year": sorted_citations_by_year
+#         }
+        
+#         return Response(result, status=status.HTTP_200_OK)
+#     except Exception as e:
+#         # Return the exception message in the response in case of an error
+#         return Response({"exception": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

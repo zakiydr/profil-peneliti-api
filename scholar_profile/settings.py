@@ -77,7 +77,7 @@ REST_FRAMEWORK = {
 }
 
 MIDDLEWARE = [
-    # 'goscholar.middleware.ProxyMiddleware',
+    'goscholar.middleware.SwiftshadowProxyMiddleware',
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",

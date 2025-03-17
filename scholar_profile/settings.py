@@ -64,7 +64,6 @@ CORS_ALLOW_HEADERS = [
     "content-type",
     "authorization",
     "x-csrftoken",
-    # Add other headers if necessary
 ]
 
 
@@ -77,7 +76,7 @@ REST_FRAMEWORK = {
 }
 
 MIDDLEWARE = [
-    'goscholar.middleware.SwiftshadowProxyMiddleware',
+    # 'goscholar.middleware.SwiftshadowProxyMiddleware',
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",

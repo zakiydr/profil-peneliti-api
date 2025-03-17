@@ -48,7 +48,6 @@ CORS_ALLOW_CREDENTIALS = True
 
 CORS_ALLOWED_ORIGINS = [
     "https://zakiydr.pythonanywhere.com",
-    # Add other allowed domains if necessary
 ]
 
 CORS_ALLOW_METHODS = [

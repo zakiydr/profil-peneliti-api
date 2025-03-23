@@ -3,6 +3,7 @@ import requests
 from functools import wraps
 
 from scholarly import scholarly
+from scholarly import ProxyGenerator
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
@@ -100,6 +101,10 @@ def get_authors_compact(request):
         
 @api_view(['GET'])
 def get_author_by_name(request):
+    pg = ProxyGenerator()
+    pg.FreeProxies()
+    scholarly.use_proxy(pg)
+
     try:
         author = request.GET.get('author')
 

@@ -14,79 +14,79 @@ from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.core import serializers
 
 # Global proxy rotation configuration
-PROXY_ROTATION_INTERVAL = 5  # Rotate proxies after this many requests
-MAX_RETRIES = 3  # Maximum number of retry attempts for a failed request
-RETRY_DELAY = 2  # Delay between retries in seconds
+# PROXY_ROTATION_INTERVAL = 5  # Rotate proxies after this many requests
+# MAX_RETRIES = 3  # Maximum number of retry attempts for a failed request
+# RETRY_DELAY = 2  # Delay between retries in seconds
 
-# Track the number of requests made with the current proxy
-request_count = 0
-current_proxy = None
+# # Track the number of requests made with the current proxy
+# request_count = 0
+# current_proxy = None
 
-def rotate_proxy_decorator(func):
-    """
-    Decorator to handle proxy rotation and retries for scholarly API calls
-    """
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        global request_count, current_proxy
+# def rotate_proxy_decorator(func):
+#     """
+#     Decorator to handle proxy rotation and retries for scholarly API calls
+#     """
+#     @wraps(func)
+#     def wrapper(*args, **kwargs):
+#         global request_count, current_proxy
         
-        # Check if we need to rotate the proxy
-        if current_proxy is None or request_count >= PROXY_ROTATION_INTERVAL:
-            current_proxy = setup_proxy()
-            request_count = 0
+#         # Check if we need to rotate the proxy
+#         if current_proxy is None or request_count >= PROXY_ROTATION_INTERVAL:
+#             current_proxy = setup_proxy()
+#             request_count = 0
         
-        # Increment the request counter
-        request_count += 1
+#         # Increment the request counter
+#         request_count += 1
         
-        # Try the request with retries
-        for attempt in range(MAX_RETRIES):
-            try:
-                return func(*args, **kwargs)
-            except Exception as e:
-                if "IP has been blocked" in str(e) or "Captcha" in str(e) or "rate limit" in str(e):
-                    if attempt < MAX_RETRIES - 1:
-                        # Rotate proxy on blocking and retry
-                        current_proxy = setup_proxy()
-                        request_count = 0
-                        time.sleep(RETRY_DELAY)
-                    else:
-                        # Max retries reached, raise the exception
-                        raise
-                else:
-                    # For other exceptions, just raise
-                    raise
+#         # Try the request with retries
+#         for attempt in range(MAX_RETRIES):
+#             try:
+#                 return func(*args, **kwargs)
+#             except Exception as e:
+#                 if "IP has been blocked" in str(e) or "Captcha" in str(e) or "rate limit" in str(e):
+#                     if attempt < MAX_RETRIES - 1:
+#                         # Rotate proxy on blocking and retry
+#                         current_proxy = setup_proxy()
+#                         request_count = 0
+#                         time.sleep(RETRY_DELAY)
+#                     else:
+#                         # Max retries reached, raise the exception
+#                         raise
+#                 else:
+#                     # For other exceptions, just raise
+#                     raise
     
-    return wrapper
+#     return wrapper
 
-def setup_proxy():
-    """
-    Set up a new proxy using ProxyGenerator
-    Returns the ProxyGenerator instance for tracking
-    """
-    pg = ProxyGenerator()
-    success = pg.FreeProxies()
+# def setup_proxy():
+#     """
+#     Set up a new proxy using ProxyGenerator
+#     Returns the ProxyGenerator instance for tracking
+#     """
+#     pg = ProxyGenerator()
+#     success = pg.FreeProxies()
     
-    if not success:
-        # Fallback to Tor if free proxies aren't available
-        success = pg.Tor_External(tor_sock_port=9050, tor_control_port=9051)
+#     if not success:
+#         # Fallback to Tor if free proxies aren't available
+#         success = pg.Tor_External(tor_sock_port=9050, tor_control_port=9051)
         
-        if not success:
-            # Last resort: use a random user agent only
-            pg.UseDefault()
+#         if not success:
+#             # Last resort: use a random user agent only
+#             pg.UseDefault()
     
-    # Apply the proxy to scholarly
-    scholarly.use_proxy(pg)
+#     # Apply the proxy to scholarly
+#     scholarly.use_proxy(pg)
     
-    # Add randomized delays between requests to appear more human-like
-    scholarly.set_timeout(30)
+#     # Add randomized delays between requests to appear more human-like
+#     scholarly.set_timeout(30)
     
-    return pg
+#     return pg
 
-# Initialize proxy on module load
-setup_proxy()
+# # Initialize proxy on module load
+# setup_proxy()
 
 @api_view(['GET'])
-@rotate_proxy_decorator
+# @rotate_proxy_decorator
 def get_authors(request):
     author_name = request.GET.get('author')
     limit = request.GET.get('limit', 10)  
@@ -164,7 +164,7 @@ def get_authors(request):
         )
         
 @api_view(['GET'])
-@rotate_proxy_decorator
+# @rotate_proxy_decorator
 def get_authors_compact(request):
     try:
         author_name = request.GET.get('author')
@@ -198,12 +198,12 @@ def get_authors_compact(request):
         )
         
 @api_view(['GET'])
-@rotate_proxy_decorator
+# @rotate_proxy_decorator
 def get_author_by_name(request):
     # Proxy Wrap
-    pg = ProxyGenerator()
-    pg.FreeProxies()
-    scholarly.use_proxy(pg)
+    # pg = ProxyGenerator()
+    # pg.FreeProxies()
+    # scholarly.use_proxy(pg)
     try:
         author = request.GET.get('author')
 
@@ -226,7 +226,7 @@ def get_author_by_name(request):
         )        
         
 @api_view(["GET"])
-@rotate_proxy_decorator
+# @rotate_proxy_decorator
 def get_author_by_id(request, id):
     try:
         if not id:
@@ -240,7 +240,7 @@ def get_author_by_id(request, id):
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
 @api_view(["GET"])
-@rotate_proxy_decorator
+# @rotate_proxy_decorator
 def get_author_detail(request, id):
     try:
         if not id:
@@ -273,7 +273,7 @@ def get_author_detail(request, id):
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
 @api_view(["GET"])
-@rotate_proxy_decorator
+# @rotate_proxy_decorator
 def get_pub_detail(request, query):
     try:
         pub_query = scholarly.search_pubs(query)
@@ -297,7 +297,7 @@ def get_pub_detail(request, query):
 # The commented out get_pub_detail function with citations can be improved as follows:
 '''
 @api_view(["GET"])
-@rotate_proxy_decorator
+# @rotate_proxy_decorator
 def get_pub_detail_with_citations(request, query):
     try:
         # Search for publications matching the query

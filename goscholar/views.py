@@ -204,7 +204,8 @@ def get_author_by_name(request):
     # Proxy Wrap
     pg = ProxyGenerator()
     proxy = FreeProxy(country_id=["SG", "US"], timeout=2, https=True).get()
-    pg.SingleProxy(http=proxy, https=proxy)
+    httpProxy = FreeProxy(country_id=["SG", "US"], timeout=2).get()
+    pg.SingleProxy(http=httpProxy, https=proxy)
     scholarly.use_proxy(pg)
     try:
         author = request.GET.get('author')

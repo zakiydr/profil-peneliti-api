@@ -199,34 +199,40 @@ def get_authors_compact(request):
         )
         
 @api_view(['GET'])
-# @rotate_proxy_decorator
 def get_author_by_name(request):
-    # Proxy Wrap
-    pg = ProxyGenerator()
-    proxy = FreeProxy(country_id=["SG", "US"], timeout=2, https=True).get()
-    httpProxy = FreeProxy(country_id=["SG", "US"], timeout=2).get()
-    pg.SingleProxy(http=httpProxy, https=proxy)
-    scholarly.use_proxy(pg)
     try:
         author = request.GET.get('author')
-
         if not author:
             return Response(
                 {"error": "Search parameter is required"}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        pg = ProxyGenerator()
+        try:
+            proxy = FreeProxy(country_id=["SG", "US"], timeout=2, https=True).get()
+            httpProxy = FreeProxy(country_id=["SG", "US"], timeout=2).get()
+            pg.SingleProxy(http=httpProxy, https=proxy)
+            scholarly.use_proxy(pg)
+        except Exception as proxy_error:
+            print(f"Proxy setup failed: {proxy_error}")
+            scholarly.use_proxy(None)
+
         search_query = scholarly.search_author(author)
-        
         result = scholarly.fill(next(search_query))
 
         return Response(result, status=status.HTTP_200_OK)
 
+    except StopIteration:
+        return Response(
+            {'error': 'No author found with the given name'}, 
+            status=status.HTTP_404_NOT_FOUND
+        )
     except Exception as e:
         return Response(
             {'error': str(e)}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )        
+        )
         
 @api_view(["GET"])
 # @rotate_proxy_decorator

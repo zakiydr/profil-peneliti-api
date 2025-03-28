@@ -3,8 +3,7 @@ import requests
 from functools import wraps
 import time
 
-from scholarly import scholarly
-from scholarly import ProxyGenerator
+from scholarly import scholarly, ProxyGenerator
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status

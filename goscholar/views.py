@@ -201,9 +201,9 @@ def get_authors_compact(request):
 # @rotate_proxy_decorator
 def get_author_by_name(request):
     # Proxy Wrap
-    # pg = ProxyGenerator()
-    # pg.FreeProxies()
-    # scholarly.use_proxy(pg)
+    pg = ProxyGenerator()
+    pg.FreeProxies()
+    scholarly.use_proxy(pg)
     try:
         author = request.GET.get('author')
 

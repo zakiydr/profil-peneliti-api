@@ -9,6 +9,8 @@ from rest_framework.response import Response
 from rest_framework import status
 import json
 
+from fp.fp import FreeProxy
+
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.core import serializers
 

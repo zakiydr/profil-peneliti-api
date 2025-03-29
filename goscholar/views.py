@@ -28,8 +28,8 @@ def set_free_proxies(request):
         
         while attempts < max_attempts:
             pg = ProxyGenerator()
-            proxy = FreeProxy(country_id=["SG", "US"], https=True).get()
-            proxy_is_set = pg.SingleProxy(http=proxy, https=proxy)
+            # proxy = FreeProxy(country_id=["SG", "US"], https=True).get()
+            proxy_is_set = pg.FreeProxies()
             
             if proxy_is_set:
                 scholarly.use_proxy(pg)

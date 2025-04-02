@@ -406,7 +406,7 @@ def get_pub_detail(request, query):
             
             # Fill publication details
             pub_detail = scholarly.fill(pub)
-            return Response(pub_detail, status=status.HTTP_200_OK)
+            return Response(pub, status=status.HTTP_200_OK)
         except StopIteration:
             return Response(
                 {"error": "No publications found matching the query"}, 

@@ -43,13 +43,13 @@ INSTALLED_APPS = [
     "goscholar",
 ]
 
-CORS_ORIGIN_ALLOW_ALL = True
+# CORS_ORIGIN_ALLOW_ALL = True
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_ALL_ORIGINS = True
 
-CORS_ALLOWED_ORIGINS = [
-    "https://zakiydr.pythonanywhere.com",
-]
+# CORS_ALLOWED_ORIGINS = [
+#     "https://zakiydr.pythonanywhere.com",
+# ]
 
 CORS_ALLOW_METHODS = ["*"]
 

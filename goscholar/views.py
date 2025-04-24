@@ -37,42 +37,6 @@ def add_random_delay(min_sec=0.5, max_sec=2.0):
     """
     time.sleep(random.uniform(min_sec, max_sec))
 
-# def rotate_proxy_decorator(view_func):
-#     """
-#     Decorator to handle proxy rotation for scholarly requests.
-    
-#     Args:
-#         view_func: The view function to decorate
-        
-#     Returns:
-#         function: Decorated function with proxy handling
-#     """
-#     @wraps(view_func)
-#     def wrapper(request, *args, **kwargs):
-#         try:
-#             for attempt in range(MAX_PROXY_ATTEMPTS):
-#                 pg = ProxyGenerator()
-#                 proxy_is_set = pg.FreeProxies()
-                
-#                 if proxy_is_set:
-#                     scholarly.use_proxy(pg)
-#                     logger.info("Successfully set new proxy")
-#                     break
-                    
-#                 add_random_delay()
-#                 logger.warning(f"Proxy attempt {attempt+1} failed, retrying...")
-            
-#             return view_func(request, *args, **kwargs)
-            
-#         except Exception as e:
-#             logger.error(f"Proxy rotation error: {str(e)}")
-#             return Response(
-#                 {"error": "Service temporarily unavailable due to proxy issues."},
-#                 status=status.HTTP_503_SERVICE_UNAVAILABLE
-#             )
-    
-#     return wrapper
-
 # API Views
 @api_view(['POST'])
 def set_free_proxies(request):

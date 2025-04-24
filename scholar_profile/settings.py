@@ -12,6 +12,9 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 
 import os
 from pathlib import Path
+from corsheaders.defaults import default_methods
+from corsheaders.defaults import default_headers
+
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -51,9 +54,15 @@ CORS_ALLOW_ALL_ORIGINS = True
 #     "https://zakiydr.pythonanywhere.com",
 # ]
 
-CORS_ALLOW_METHODS = ["*"]
+CORS_ALLOW_METHODS = (
+    *default_methods,
+)
 
-CORS_ALLOW_HEADERS = ["*"]
+from corsheaders.defaults import default_headers
+
+CORS_ALLOW_HEADERS = (
+    *default_headers,
+)
 
 
 
@@ -67,6 +76,7 @@ REST_FRAMEWORK = {
 MIDDLEWARE = [
     # 'goscholar.middleware.ProxyManager',
     "corsheaders.middleware.CorsMiddleware",
+    "django.middleware.common.CommonMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",

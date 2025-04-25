@@ -2,6 +2,12 @@
 __pycache__
 db.sqlite3
 .env
+.env.dev
+.env.prod
+.dockerignore
 staticfiles
 .vercel
 env
+Dockerfile
+venv
+entrypoint.prod.sh

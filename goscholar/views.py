@@ -79,7 +79,7 @@ def rotate_proxy(request):
         )
 
 @api_view(['GET'])
-@direct_proxy_rotation
+# @direct_proxy_rotation
 def get_authors(request):
     """
     Search for authors by name with pagination.
@@ -153,7 +153,7 @@ def get_authors(request):
     return Response(response_data, status=status.HTTP_200_OK)
         
 @api_view(['GET'])
-@direct_proxy_rotation
+# @direct_proxy_rotation
 def get_authors_compact(request):
     """
     Get a compact list of authors by name (limited to 10 results).
@@ -191,7 +191,7 @@ def get_authors_compact(request):
     return Response(response_data, status=status.HTTP_200_OK)
         
 @api_view(['GET'])
-@direct_proxy_rotation
+# @direct_proxy_rotation
 def get_author_by_name(request):
     """
     Get detailed information for a single author by name.
@@ -224,7 +224,7 @@ def get_author_by_name(request):
     return Response(result, status=status.HTTP_200_OK)
         
 @api_view(["GET"])
-@direct_proxy_rotation
+# @direct_proxy_rotation
 def get_author_by_id(request, id):
     """
     Get author information by Scholar ID.
@@ -252,7 +252,7 @@ def get_author_by_id(request, id):
     return Response(author_detail, status=status.HTTP_200_OK) 
     
 @api_view(["GET"])
-@direct_proxy_rotation
+# @direct_proxy_rotation
 def get_author_detail(request, id):
     """
     Get detailed author information including publications by Scholar ID.
@@ -305,7 +305,7 @@ def get_author_detail(request, id):
     return Response(response_data, status=status.HTTP_200_OK)
     
 @api_view(["GET"])
-@direct_proxy_rotation
+# @direct_proxy_rotation
 def get_pub_detail(request, query):
     """
     Get detailed information for a publication by search query.
@@ -339,7 +339,7 @@ def get_pub_detail(request, query):
         )
 
 @api_view(["GET"])
-@direct_proxy_rotation
+# @direct_proxy_rotation
 def get_pub_detail_with_citations(request, query):
     """
     Get detailed information for a publication with its citations.

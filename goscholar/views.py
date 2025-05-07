@@ -13,7 +13,7 @@ from rest_framework import status
 from scholarly import scholarly, ProxyGenerator
 
 # Import our custom proxy manager
-from .proxy import DirectProxyManager, direct_proxy_rotation
+# from .proxy import DirectProxyManager, direct_proxy_rotation
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -102,7 +102,7 @@ def get_authors(request):
         authors.append(author)
         if len(authors) >= limit * page:
             break
-        DirectProxyManager.add_random_delay(0.5, 2.0)
+        # DirectProxyManager.add_random_delay(0.5, 2.0)
 
     # Handle pagination
     paginator = Paginator(authors, limit)
@@ -159,7 +159,7 @@ def get_authors_compact(request):
         authors.append(author)
         if len(authors) >= 10:
             break
-        DirectProxyManager.add_random_delay(0.5, 1.5)
+        # DirectProxyManager.add_random_delay(0.5, 1.5)
 
     if not authors:
         return Response(
@@ -216,7 +216,7 @@ def get_author_by_name(request):
                 continue
                 
             # Set the proxy for scholarly
-            scholarly.use_proxy(pg)
+            scholarly.use_proxy(success)
             
             # Execute the search
             search_query = scholarly.search_author(author)
@@ -306,7 +306,7 @@ def get_author_detail(request, id):
         for pub in pub_generator:
             publications.append(pub)
             # Add random delay between publication fetches
-            DirectProxyManager.add_random_delay(1.0, 3.0)
+            # DirectProxyManager.add_random_delay(1.0, 3.0)
             
             # Limit the number of publications
             if len(publications) >= MAX_PUBLICATIONS:
@@ -347,7 +347,7 @@ def get_pub_detail(request, query):
     try:
         pub = next(pub_query)
         # Add delay to mimic human behavior
-        DirectProxyManager.add_random_delay(1.0, 2.0)
+        # DirectProxyManager.add_random_delay(1.0, 2.0)
         
         # Fill publication details
         pub_detail = scholarly.fill(pub)
@@ -401,7 +401,7 @@ def get_pub_detail_with_citations(request, query):
         # Process each citing publication and fill in details
         for citation in citations_generator:
             # Add random delay between citation fetches
-            DirectProxyManager.add_random_delay(1.5, 3.0)
+            # DirectProxyManager.add_random_delay(1.5, 3.0)
             
             try:
                 filled_citation = scholarly.fill(citation)

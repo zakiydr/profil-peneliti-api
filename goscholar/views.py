@@ -39,7 +39,7 @@ class ProxyManager:
     Thread-local proxy manager with TTL cache and health checks.
     """
     _local = local()
-    PROXY_SOURCE_URL = "https://raw.githubusercontent.com/monosans/proxy-list/refs/heads/main/proxies/http.txt"
+    PROXY_SOURCE_URL = "https://raw.githubusercontent.com/monosans/proxy-list/refs/heads/main/proxies/socks5.txt"
     CACHE_TTL = 300  # seconds
 
     def __init__(self):

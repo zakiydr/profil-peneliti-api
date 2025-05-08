@@ -3,6 +3,7 @@ import time
 import json
 import requests
 import logging
+import threading
 
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 
@@ -29,12 +30,8 @@ MAX_CITATIONS = 100
 import requests
 import time
 
-# Simple in-memory cache
-_proxy_cache = {
-    'list': [],
-    'timestamp': 0,
-    'ttl_seconds': 300 # Cache for 5 minutes
-}
+proxy_lock = threading.Lock()
+_proxy_cache = {'list': [], 'timestamp': 0, 'ttl_seconds': 300}
 
 def get_proxy_list():
     """
@@ -208,121 +205,35 @@ def get_authors_compact(request):
 
 @api_view(['GET'])
 def get_author_by_name(request):
-    """
-    Get detailed information for a single author by name with improved proxy rotation.
-    """
     author_name = request.GET.get('author')
-
-    if not author_name:
-        return Response(
-            {"error": "Author parameter is required"},
-            status=status.HTTP_400_BAD_REQUEST
-        )
-
-    # Use the improved get_proxy_list which caches and formats proxies
-    proxies = get_proxy_list()
-
-    # The rest of the view logic from my previous "Option 1: Refined Manual Proxy Rotation" applies here.
-    # Key points:
-    # 1. Handle empty proxy list.
-    # 2. Shuffle the proxy list once.
-    # 3. Iterate through the shuffled list (up to max_attempts).
-    # 4. Inside the loop:
-    #    a. Create a NEW ProxyGenerator instance for THIS attempt.
-    #    b. Use `pg.SingleProxy(http=proxy, https=proxy)` (this should now work as 'proxy' is 'http://IP:PORT').
-    #    c. Set `scholarly.use_proxy(success)`.
-    #    d. Call `scholarly.search_author` and `scholarly.fill`.
-    #    e. Catch specific exceptions (network errors, timeouts) and `StopIteration`.
-    #    f. In a `finally` block, **crucially** call `scholarly.use_proxy(None)` to clear the global state.
-    #    g. If successful, break the loop and return 200.
-    # 5. After the loop, return 404 if no author found (StopIteration was the result), or 500 for other failures.
-
-    # ... (insert the rest of the code from Option 1 Refined, making sure it uses the formatted proxies)
-    # For example, the loop structure would be:
-
-    proxies_to_try = proxies[:] # Create a copy
-    random.shuffle(proxies_to_try) # Shuffle for better distribution
-
-    max_attempts = min(5, len(proxies_to_try) if proxies_to_try else 1) # Ensure at least 1 attempt if list is empty
-    attempts = 0
-
-    author_found = False
-    author_result = None
-    last_error = None
-
-    if not proxies_to_try:
-         print("Proxy list is empty. Attempting search without proxy.")
-         proxies_to_try = [None] # Add None to try without proxy
-
-    for proxy in proxies_to_try:
-        if attempts >= max_attempts:
-            break
-
-        attempts += 1
-        proxy_info = proxy if proxy else "No Proxy"
-        print(f"Attempt {attempts}/{max_attempts} with proxy: {proxy_info}")
-
-        pg = ProxyGenerator() # Create a new instance for this attempt
-
+    
+    proxies = get_proxy_list() or [None]
+    random.shuffle(proxies)
+    
+    for i, proxy in enumerate(proxies[:5]):
         try:
-            if proxy:
-                 # proxy is now like 'http://IP:PORT' - this should work
-                 success = pg.SingleProxy(http=proxy, https=proxy)
-                 if not success:
-                      print(f"Failed to configure ProxyGenerator for proxy: {proxy}")
-                      last_error = f"Failed to configure proxy {proxy}"
-                      continue # Skip this proxy
-
-                 scholarly.use_proxy(success) # Set global state - still NOT thread-safe
-
-            else:
-                 # Attempt without proxy
-                 scholarly.use_proxy(None) # Clear global state - still NOT thread-safe
-
-            # Execute the search
-            search_query = None
-            try:
-                 search_query = scholarly.search_author(author_name)
-                 author_result = next(search_query)
-                 author_result = scholarly.fill(author_result)
-                 author_found = True
-                 print(f"Successfully found author '{author_name}' with proxy: {proxy_info}")
-                 break # Success!
-
-            except StopIteration:
-                 print(f"No author found matching '{author_name}' with proxy: {proxy_info}")
-                 last_error = f"No author found for '{author_name}'"
-                 # Decide if you want to continue trying other proxies or break
-                 # Sticking to original logic, we continue the loop.
-                 continue # Try next proxy
-
-            except Exception as e:
-                 print(f"Error with proxy {proxy_info}: {e}")
-                 last_error = f"Error with proxy {proxy_info}: {e}"
-                 continue # Try next proxy
-
+            with proxy_lock:
+                pg = ProxyGenerator()
+                if proxy and pg.SingleProxy(http=proxy, https=proxy):
+                    scholarly.use_proxy(pg)
+                else:
+                    scholarly.use_proxy(None)
+                
+                # Perform search operations
+                search_query = scholarly.search_author(author_name)
+                author = next(search_query)
+                return Response(scholarly.fill(author))
+        
+        except Exception as e:
+            logger.error(f"Attempt {i+1} failed: {str(e)}")
+            time.sleep(0.5 * (i+1))  # Progressive delay
+        
         finally:
-            # IMPORTANT: ALWAYS clear the global scholarly proxy state
             scholarly.use_proxy(None)
 
-
-    # --- End of loop ---
-
-    if author_found and author_result:
-        return Response(author_result, status=status.HTTP_200_OK)
-    elif last_error and "No author found" in last_error:
-         return Response(
-            {"error": f"No author found matching the search criteria for '{author_name}' after multiple attempts."},
-            status=status.HTTP_404_NOT_FOUND
-        )
-    else:
-        error_message = f"Failed to retrieve author information for '{author_name}' after {attempts} attempts."
-        if last_error:
-             error_message += f" Last error: {last_error}"
-        return Response(
-            {"error": error_message},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )@api_view(["GET"])
+    return Response({"error": "All proxies failed"}, status=500)
+        
+@api_view(["GET"])
 # @direct_proxy_rotation
 def get_author_by_id(request, id):
     """

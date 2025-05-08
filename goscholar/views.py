@@ -59,7 +59,7 @@ class ProxyManager:
             resp = requests.get(self.PROXY_SOURCE_URL, timeout=10)
             resp.raise_for_status()
             proxies = [
-                f"http://{line.strip()}"
+                line.strip()
                 for line in resp.text.splitlines()
                 if line.strip() and ':' in line
             ]

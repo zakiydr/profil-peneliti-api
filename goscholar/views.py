@@ -33,59 +33,85 @@ import time
 proxy_lock = threading.Lock()
 _proxy_cache = {'list': [], 'timestamp': 0, 'ttl_seconds': 300}
 
-def get_proxy_list():
+class ProxyManager:
     """
-    Fetches a list of proxies from the provided URL, caches results,
-    and formats them for scholarly (adds http:// prefix).
-
-    Returns:
-        list: List of proxies in http://IP:PORT format
+    Thread-local proxy manager with TTL cache and health checks.
     """
-    global _proxy_cache
-    url = "https://raw.githubusercontent.com/monosans/proxy-list/refs/heads/main/proxies/http.txt"
+    _local = local()
+    PROXY_SOURCE_URL = "https://raw.githubusercontent.com/monosans/proxy-list/refs/heads/main/proxies/http.txt"
+    CACHE_TTL = 300  # seconds
 
-    # Check cache
-    if time.time() - _proxy_cache['timestamp'] < _proxy_cache['ttl_seconds']:
-        print("Using cached proxy list.")
-        return _proxy_cache['list']
+    def __init__(self):
+        # initialize thread-local storage
+        if not hasattr(self._local, 'cache'):
+            self._local.cache = {'list': [], 'timestamp': 0}
+            self._local.backoff = {}
 
-    print("Fetching new proxy list...")
-    try:
-        response = requests.get(url, timeout=10) # Add a timeout
-        response.raise_for_status()
+    def _fetch_proxies(self):
+        """Fetch fresh proxies from source, cache them with TTL."""
+        now = time.time()
+        cache = self._local.cache
+        if now - cache['timestamp'] < self.CACHE_TTL:
+            return cache['list']
 
-        proxies = []
+        try:
+            resp = requests.get(self.PROXY_SOURCE_URL, timeout=10)
+            resp.raise_for_status()
+            proxies = [
+                f"http://{line.strip()}"
+                for line in resp.text.splitlines()
+                if line.strip() and ':' in line
+            ]
+            random.shuffle(proxies)
+            cache.update({'list': proxies, 'timestamp': now})
+            return proxies
+        except requests.RequestException as e:
+            logger.warning(f"Proxy fetch failed: {e}")
+            return cache['list']
 
-        for line in response.text.splitlines():
-            cleaned_line = line.strip()
-            if not cleaned_line:
+    def _health_check(self, proxy: str) -> bool:
+        """Quick HEAD request to Google Scholar to verify proxy works."""
+        try:
+            requests.head(
+                "https://scholar.google.com",
+                proxies={'http': proxy, 'https': proxy},
+                timeout=5
+            )
+            return True
+        except Exception:
+            return False
+
+    def get_next(self):
+        """
+        Return next healthy proxy or None if exhausted.
+        Implements simple circuit-breaker: failing proxies are retired for 5m.
+        """
+        proxies = self._fetch_proxies()
+        for p in proxies:
+            # skip if in back-off
+            bo = self._local.backoff.get(p, 0)
+            if time.time() < bo:
                 continue
+            if self._health_check(p):
+                return p
+            # retire for 5m
+            self._local.backoff[p] = time.time() + 300
+        return None
 
-            # Assume proxies from this list are HTTP/HTTPS and add the prefix
-            # The original code only added IP:PORT lines, sticking to that pattern:
-            if ':' in cleaned_line and len(cleaned_line.split(':')) == 2:
-                 # Add http:// prefix required by requests/scholarly
-                 formatted_proxy = f"http://{cleaned_line}"
-                 proxies.append(formatted_proxy)
-            # You might add logic here to handle other protocols if the source changes,
-            # but for this specific source, IP:PORT + http:// is the most likely.
+    def apply(self, proxy: str):
+        """
+        Configure scholarly with a fresh, single-use ProxyGenerator.
+        Always call scholarly.use_proxy(None) after your operation.
+        """
+        pg = ProxyGenerator()
+        if proxy:
+            success = pg.SingleProxy(http=proxy, https=proxy)
+            if not success:
+                raise RuntimeError(f"SingleProxy failed for {proxy}")
+            scholarly.use_proxy(pg)
+        else:
+            scholarly.use_proxy(None)
 
-        # Update cache
-        _proxy_cache['list'] = proxies
-        _proxy_cache['timestamp'] = time.time()
-        print(f"Fetched {len(proxies)} proxies.")
-        return proxies
-
-    except requests.exceptions.RequestException as e: # Catch specific request exceptions
-        print(f"Error fetching proxy list: {e}")
-        # Return cached list if available, otherwise empty
-        if _proxy_cache['list']:
-             print("Returning stale cached proxy list due to fetch error.")
-             return _proxy_cache['list']
-        return []
-    except Exception as e:
-        print(f"An unexpected error occurred while processing proxy list: {e}")
-        return []    
     
 @api_view(['GET'])
 # @direct_proxy_rotation
@@ -206,32 +232,40 @@ def get_authors_compact(request):
 @api_view(['GET'])
 def get_author_by_name(request):
     author_name = request.GET.get('author')
-    
-    proxies = get_proxy_list() or [None]
-    random.shuffle(proxies)
-    
-    for i, proxy in enumerate(proxies[:5]):
+    if not author_name:
+        return Response({'error': 'Author parameter is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    pm = ProxyManager()
+    max_attempts = 5
+    last_error = None
+
+    for attempt in range(1, max_attempts + 1):
+        proxy = pm.get_next()
+        proxy_info = proxy or "No Proxy"
+        logger.debug(f"Attempt {attempt}/{max_attempts} with {proxy_info}")
+
         try:
-            with proxy_lock:
-                pg = ProxyGenerator()
-                if proxy and pg.SingleProxy(http=proxy, https=proxy):
-                    scholarly.use_proxy(pg)
-                else:
-                    scholarly.use_proxy(None)
-                
-                # Perform search operations
-                search_query = scholarly.search_author(author_name)
-                author = next(search_query)
-                return Response(scholarly.fill(author))
-        
+            pm.apply(proxy)
+            search_gen = scholarly.search_author(author_name)
+            author = next(search_gen)
+            author = scholarly.fill(author)
+            return Response(author, status=status.HTTP_200_OK)
+        except StopIteration:
+            last_error = "No author found"
         except Exception as e:
-            logger.error(f"Attempt {i+1} failed: {str(e)}")
-            time.sleep(0.5 * (i+1))  # Progressive delay
-        
+            last_error = str(e)
         finally:
             scholarly.use_proxy(None)
 
-    return Response({"error": "All proxies failed"}, status=500)
+    if last_error == "No author found":
+        return Response(
+            {"error": f"No author matching '{author_name}' after {max_attempts} attempts."},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    return Response(
+        {"error": f"Failed after {max_attempts} attempts. Last error: {last_error}"},
+        status=status.HTTP_500_INTERNAL_SERVER_ERROR
+    )
         
 @api_view(["GET"])
 # @direct_proxy_rotation

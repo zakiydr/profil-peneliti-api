@@ -4,6 +4,7 @@ import json
 import requests
 import logging
 import threading
+from threading import local
 
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 

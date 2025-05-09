@@ -111,7 +111,7 @@ class ProxyManager:
                 raise RuntimeError(f"SingleProxy failed for {proxy}")
             scholarly.use_proxy(pg)
         else:
-            scholarly.use_proxy(None)
+            scholarly.use_proxy(None, None)
 
     
 @api_view(['GET'])
@@ -256,7 +256,7 @@ def get_author_by_name(request):
         except Exception as e:
             last_error = str(e)
         finally:
-            scholarly.use_proxy(None)
+            scholarly.use_proxy(None, None)
 
     if last_error == "No author found":
         return Response(

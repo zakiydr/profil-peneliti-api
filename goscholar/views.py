@@ -15,6 +15,9 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
 
+from .proxy_rotator import ensure_scholarly_proxy, handle_scholarly_error, rotate_scholarly_proxy, refresh_proxy_list
+
+
 # Configure logging
 logger = logging.getLogger(__name__)
 
@@ -27,16 +30,33 @@ MAX_CITATIONS = 100
 MAX_PROXY_ATTEMPTS = 5
 
 # Utility functions
-def add_random_delay(min_sec=0.5, max_sec=2.0):
+def refresh_proxies(request):
     """
-    Add a random delay to mimic human behavior and avoid rate limiting.
+    Admin endpoint to force refresh of the proxy list
     
-    Args:
-        min_sec (float): Minimum delay in seconds
-        max_sec (float): Maximum delay in seconds
+    Returns:
+        Response: Status of the refresh operation
     """
-    time.sleep(random.uniform(min_sec, max_sec))
-
+    try:
+        success = refresh_proxy_list()
+        rotate_scholarly_proxy(force=True)
+        
+        if success:
+            return Response(
+                {"status": "success", "message": "Proxy list refreshed successfully"}, 
+                status=status.HTTP_200_OK
+            )
+        else:
+            return Response(
+                {"status": "error", "message": "Failed to refresh proxy list"}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    except Exception as e:
+        logger.exception(f"Error refreshing proxies: {str(e)}")
+        return Response(
+            {'error': f"Failed to refresh proxies: {str(e)}"}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 # API Views
 @api_view(['POST'])
 def set_free_proxies(request):
@@ -207,19 +227,20 @@ def get_authors_compact(request):
         )
         
 @api_view(['GET'])
-# @rotate_proxy_decorator
 def get_author_by_name(request):
     """
     Get detailed information for a single author by name.
     
     Query Parameters:
         author (str): Name of the author to search
+        refresh_proxies (bool, optional): Force refresh of proxy list before searching
         
     Returns:
         Response: Detailed author information
     """
     try:
         author = request.GET.get('author')
+        force_refresh = request.GET.get('refresh_proxies', 'false').lower() == 'true'
 
         if not author:
             return Response(
@@ -227,25 +248,64 @@ def get_author_by_name(request):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        search_query = scholarly.search_author(author)
+        # Refresh proxy list if requested
+        if force_refresh:
+            refresh_proxy_list()
+            
+        # Ensure proxy is set up
+        ensure_scholarly_proxy()
         
-        try:
-            author_result = next(search_query)
-            result = scholarly.fill(author_result)
-        except StopIteration:
-            return Response(
-                {"error": "No author found matching the search criteria"}, 
-                status=status.HTTP_404_NOT_FOUND
-            )
-
-        return Response(result, status=status.HTTP_200_OK)
+        # Try to get author data with proxy rotation and retries
+        max_retries = 5  # Increased retries since we have more proxies
+        retry_count = 0
+        
+        while retry_count < max_retries:
+            try:
+                search_query = scholarly.search_author(author)
+                
+                try:
+                    author_result = next(search_query)
+                    result = scholarly.fill(author_result)
+                    return Response(result, status=status.HTTP_200_OK)
+                except StopIteration:
+                    return Response(
+                        {"error": "No author found matching the search criteria"}, 
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+            except Exception as e:
+                error_message = str(e).lower()
+                retry_count += 1
+                
+                # Determine error type for better handling
+                error_type = 'unknown'
+                if '403' in error_message or 'forbidden' in error_message:
+                    error_type = '403'
+                elif 'captcha' in error_message:
+                    error_type = 'captcha'
+                elif 'timeout' in error_message or 'time out' in error_message:
+                    error_type = 'timeout'
+                elif 'connection' in error_message:
+                    error_type = 'connection'
+                
+                # Handle error by potentially rotating proxy
+                handle_scholarly_error(error_type)
+                
+                # If we've hit max retries, give up
+                if retry_count >= max_retries:
+                    logger.error(f"Failed after {max_retries} attempts: {str(e)}")
+                    raise
+                else:
+                    logger.warning(f"Retry {retry_count}/{max_retries} after error: {error_type}")
+                    # Add a small delay between retries
+                    import time
+                    time.sleep(2)
 
     except Exception as e:
         logger.exception(f"Error retrieving author details by name: {str(e)}")
         return Response(
             {'error': f"Failed to retrieve author details: {str(e)}"}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )        
+        )
         
 @api_view(["GET"])
 # @rotate_proxy_decorator

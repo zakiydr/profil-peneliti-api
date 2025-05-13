@@ -4,6 +4,7 @@ from . import views
 
 urlpatterns = [
     # path("index/", views.index, name="index"),
+    path('refresh-proxies/', refresh_proxies, name='refresh_proxies'),
     path("set_free_proxy/", views.set_free_proxies, name="set_free_proxy"),
     path("author/search/", views.get_authors, name="get_authors"),
     path("author/<str:id>", views.get_author_by_id, name="author_id"),

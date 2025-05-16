@@ -206,6 +206,7 @@ def get_author_by_name(request):
     
     Query Parameters:
         author (str): Name of the author to search
+        refresh_proxies (bool, optional): Force refresh of proxy list before searching
         
     Returns:
         Response: Detailed author information

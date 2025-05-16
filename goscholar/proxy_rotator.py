@@ -1,347 +1,296 @@
-import os
-import random
-import time
+"""
+Proxy rotator for Django applications using scholarly.
+This module handles downloading, parsing, and rotating proxies from monosans/proxy-list.
+"""
 import logging
+import random
+import re
+import time
+from datetime import datetime, timedelta
+from threading import Lock
+from typing import Dict, List, Optional, Tuple, Union
+
 import requests
-from concurrent.futures import ThreadPoolExecutor
+import urllib3
+from django.conf import settings
 from scholarly import scholarly, ProxyGenerator
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-class GitHubProxyFetcher:
-    """Class to fetch and validate proxies from GitHub repositories"""
+# Disable SSL warnings - only for the proxy list download
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+class ProxyListDownloader:
+    """Downloads and parses the proxy list from GitHub."""
     
-    # Source URLs for different proxy types
-    PROXY_SOURCES ='https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/all.txt'
+    PROXY_URL = "https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/all.txt"
     
-    # Test URL to validate proxies
-    TEST_URL = 'https://httpbin.org/ip'
-    
-    def __init__(self, proxy_types=None, cache_duration=3600, max_proxies=50):
-        """
-        Initialize the proxy fetcher
+    @staticmethod
+    def download_proxy_list() -> List[str]:
+        """Download the proxy list from GitHub.
         
-        Args:
-            proxy_types: List of proxy types to fetch ('socks4', 'socks5', 'mixed')
-            cache_duration: How long to cache proxies before refreshing (seconds)
-            max_proxies: Maximum number of proxies to validate and store
+        Returns:
+            List of proxy strings in format "protocol://ip:port"
         """
-        self.proxy_types = proxy_types or ['socks5', 'socks4']  # Default to SOCKS proxies
-        self.cache_duration = cache_duration
-        self.max_proxies = max_proxies
-        self.proxies = []
-        self.last_fetch_time = 0
-    
-    def _fetch_proxy_list(self, proxy_type):
-        """Fetch proxies of specified type from GitHub"""
         try:
-            url = self.PROXY_SOURCES.get(proxy_type)
-            if not url:
-                logger.error(f"Unknown proxy type: {proxy_type}")
-                return []
-                
-            response = requests.get(url, timeout=10)
-            if response.status_code != 200:
-                logger.error(f"Failed to fetch proxies from {url}: {response.status_code}")
-                return []
-                
-            # Parse the response text
-            proxy_list = response.text.strip().split('\n')
-        
+            # Use verify=False only for this specific request to avoid SSL issues
+            response = requests.get(ProxyListDownloader.PROXY_URL, 
+                                    timeout=10, 
+                                    verify=False)
+            response.raise_for_status()
             
-            logger.info(f"Fetched {len(proxy_list)} {proxy_type} proxies")
-            return proxy_list
+            # Split by newlines and filter empty lines
+            proxies = [line.strip() for line in response.text.splitlines() if line.strip()]
+            logger.info(f"Downloaded {len(proxies)} proxies from GitHub")
+            return proxies
             
-        except Exception as e:
-            logger.exception(f"Error fetching {proxy_type} proxies: {str(e)}")
+        except requests.RequestException as e:
+            logger.error(f"Error downloading proxy list: {str(e)}")
             return []
     
-    def _test_proxy(self, proxy):
-        """Test if a proxy is working"""
-        try:
-            proxies = {
-                'http': proxy,
-                'https': proxy
-            }
-            
-            response = requests.get(
-                self.TEST_URL, 
-                proxies=proxies, 
-                timeout=5
-            )
-            
-            if response.status_code == 200:
-                logger.debug(f"Proxy {proxy} is valid")
-                return proxy
-            else:
-                logger.debug(f"Proxy {proxy} failed validation with status {response.status_code}")
-                return None
-                
-        except Exception as e:
-            logger.debug(f"Proxy {proxy} validation error: {str(e)}")
-            return None
-    
-    def _validate_proxies(self, proxy_list):
-        """Validate a list of proxies in parallel"""
-        valid_proxies = []
-        
-        # Use ThreadPoolExecutor for parallel validation
-        with ThreadPoolExecutor(max_workers=10) as executor:
-            futures = [executor.submit(self._test_proxy, proxy) for proxy in proxy_list]
-            
-            for future in futures:
-                result = future.result()
-                if result:
-                    valid_proxies.append(result)
-                    # If we have enough valid proxies, stop validation
-                    if len(valid_proxies) >= self.max_proxies:
-                        break
-        
-        logger.info(f"Found {len(valid_proxies)} valid proxies out of {len(proxy_list)} tested")
-        return valid_proxies
-    
-    def get_proxies(self, force_refresh=False):
-        """
-        Get a list of valid proxies, fetching new ones if needed
+    @staticmethod
+    def parse_proxy(proxy_str: str) -> Tuple[str, str, int]:
+        """Parse a proxy string into its components.
         
         Args:
-            force_refresh: If True, force a refresh of the proxy list
+            proxy_str: Proxy string in format "protocol://ip:port"
             
         Returns:
-            list: List of valid proxy URLs
+            Tuple of (protocol, host, port)
+            
+        Raises:
+            ValueError: If the proxy string is invalid
         """
-        current_time = time.time()
+        match = re.match(r"^(http|socks4|socks5)://([^:]+):(\d+)$", proxy_str)
+        if not match:
+            raise ValueError(f"Invalid proxy format: {proxy_str}")
         
-        # Check if we need to refresh the proxies
-        if force_refresh or not self.proxies or (current_time - self.last_fetch_time) > self.cache_duration:
-            logger.info("Refreshing proxy list...")
-            
-            all_proxies = []
-            for proxy_type in self.proxy_types:
-                proxies = self._fetch_proxy_list(proxy_type)
-                all_proxies.extend(proxies)
-                
-            # Shuffle to randomize testing order
-            random.shuffle(all_proxies)
-            
-            # Take a subset to validate to save time
-            validation_subset = all_proxies[:min(len(all_proxies), self.max_proxies * 3)]
-            
-            # Validate the proxies
-            self.proxies = self._validate_proxies(validation_subset)
-            self.last_fetch_time = current_time
-        
-        return self.proxies
+        protocol, host, port_str = match.groups()
+        return protocol, host, int(port_str)
 
 
 class ScholarlyProxyRotator:
-    """
-    A class to manage proxy rotation for the scholarly library
-    using proxies fetched from GitHub
-    """
-    def __init__(self, rotation_interval=600, max_cache_age=3600, proxy_types=None):
-        """
-        Initialize the proxy rotator
+    """Manages proxy rotation for scholarly library with auto-refreshing proxy list."""
+    
+    def __init__(self, refresh_interval_minutes: int = 60):
+        """Initialize the proxy rotator.
         
         Args:
-            rotation_interval: Time in seconds between proxy rotations
-            max_cache_age: Maximum age of cached proxies before refresh
-            proxy_types: Types of proxies to use ('socks4', 'socks5', 'mixed')
+            refresh_interval_minutes: How often to refresh the proxy list in minutes
         """
-        self.rotation_interval = rotation_interval
-        self.max_cache_age = max_cache_age
-        self.last_rotation_time = 0
-        self.current_proxy_index = -1
-        self.proxy_generator = ProxyGenerator()
-        self.setup_done = False
+        self.proxies: List[str] = []
+        self.http_proxies: List[str] = []
+        self.socks4_proxies: List[str] = []
+        self.socks5_proxies: List[str] = []
+        self.last_refresh: Optional[datetime] = None
+        self.refresh_interval = timedelta(minutes=refresh_interval_minutes)
+        self.current_proxy: Optional[str] = None
+        self.lock = Lock()
+        self.failed_proxies: Dict[str, datetime] = {}
+        self.proxy_timeout_minutes = getattr(settings, "PROXY_FAILURE_TIMEOUT_MINUTES", 30)
         
-        # Initialize the proxy fetcher
-        self.proxy_fetcher = GitHubProxyFetcher(
-            proxy_types=proxy_types or ['socks5', 'socks4'],
-            cache_duration=max_cache_age
-        )
-        
-        # Failed proxies tracking
-        self.failed_proxies = set()
-        
-        # Apply initial proxy setup
-        self.proxies = self._load_proxies()
-        self.rotate_proxy()
+        # Initial proxy list download
+        self.refresh_proxy_list()
     
-    def _load_proxies(self):
-        """Load and return list of available proxies"""
-        # Try to get proxies from environment variable first
-        proxy_list = os.environ.get('SCHOLARLY_PROXIES', '')
-        if proxy_list:
-            return [p.strip() for p in proxy_list.split(',') if p.strip()]
+    def refresh_proxy_list(self) -> bool:
+        """Download and refresh the proxy list.
         
-        # If no environment proxies, fetch from GitHub
-        try:
-            fetched_proxies = self.proxy_fetcher.get_proxies()
-            if fetched_proxies:
-                return fetched_proxies
-        except Exception as e:
-            logger.exception(f"Error fetching proxies: {str(e)}")
-        
-        # Default to our Docker proxy if no GitHub proxies
-        return ['http://proxy-manager:3128']
-    
-    def _refresh_proxies(self):
-        """Refresh the proxy list"""
-        old_count = len(self.proxies)
-        self.proxies = self._load_proxies()
-        
-        # Remove any previously failed proxies
-        self.proxies = [p for p in self.proxies if p not in self.failed_proxies]
-        
-        logger.info(f"Refreshed proxy list: {len(self.proxies)} proxies available (was {old_count})")
-        return len(self.proxies) > 0
-    
-    def rotate_proxy(self, force=False):
+        Returns:
+            True if successful, False otherwise
         """
-        Rotate to the next proxy in the list
+        with self.lock:
+            proxies = ProxyListDownloader.download_proxy_list()
+            
+            if not proxies:
+                logger.warning("No proxies downloaded, keeping existing list")
+                return False
+            
+            # Categorize proxies by protocol
+            self.http_proxies = []
+            self.socks4_proxies = []
+            self.socks5_proxies = []
+            
+            for proxy in proxies:
+                try:
+                    protocol, _, _ = ProxyListDownloader.parse_proxy(proxy)
+                    if protocol == "http":
+                        self.http_proxies.append(proxy)
+                    elif protocol == "socks4":
+                        self.socks4_proxies.append(proxy)
+                    elif protocol == "socks5":
+                        self.socks5_proxies.append(proxy)
+                except ValueError:
+                    continue
+            
+            # Store all valid proxies
+            self.proxies = self.http_proxies + self.socks4_proxies + self.socks5_proxies
+            self.last_refresh = datetime.now()
+            
+            # Clear failed proxies that have been removed from the list
+            self.failed_proxies = {p: t for p, t in self.failed_proxies.items() 
+                                  if p in self.proxies}
+            
+            logger.info(f"Refreshed proxy list: {len(self.http_proxies)} HTTP, "
+                      f"{len(self.socks4_proxies)} SOCKS4, "
+                      f"{len(self.socks5_proxies)} SOCKS5")
+            return True
+    
+    def check_refresh_needed(self) -> None:
+        """Check if the proxy list needs refreshing and refresh if needed."""
+        if not self.last_refresh or \
+           datetime.now() - self.last_refresh > self.refresh_interval:
+            self.refresh_proxy_list()
+    
+    def mark_proxy_failed(self, proxy: str) -> None:
+        """Mark a proxy as failed.
         
         Args:
-            force: If True, force rotation regardless of time interval
+            proxy: The proxy string that failed
+        """
+        with self.lock:
+            self.failed_proxies[proxy] = datetime.now()
+            logger.warning(f"Marked proxy as failed: {proxy}")
+    
+    def get_available_proxies(self, proxy_type: Optional[str] = None) -> List[str]:
+        """Get available proxies filtered by type and excluding recently failed ones.
+        
+        Args:
+            proxy_type: Optional proxy type filter ('http', 'socks4', 'socks5')
             
         Returns:
-            bool: True if rotation was successful
+            List of available proxy strings
         """
-        current_time = time.time()
-        
-        # Check if it's time to rotate
-        if not force and (current_time - self.last_rotation_time) < self.rotation_interval:
-            return False
+        with self.lock:
+            # Remove failed proxies that have timed out
+            now = datetime.now()
+            timeout = timedelta(minutes=self.proxy_timeout_minutes)
+            self.failed_proxies = {
+                p: t for p, t in self.failed_proxies.items()
+                if now - t < timeout
+            }
             
-        # Refresh proxy list if needed
-        if not self.proxies or len(self.proxies) <= 1:
-            self._refresh_proxies()
-            
-        # Select next proxy
-        if not self.proxies:
-            logger.warning("No proxies available for rotation")
-            return False
-            
-        # First try to find a proxy we haven't failed with
-        available_proxies = [p for p in self.proxies if p not in self.failed_proxies]
-        
-        # If all have failed, clear the failed list and try again
-        if not available_proxies:
-            logger.warning("All proxies have failed, resetting failed list")
-            self.failed_proxies.clear()
-            available_proxies = self.proxies
-            
-        # Select a random proxy from available ones
-        proxy_url = random.choice(available_proxies)
-        
-        logger.info(f"Rotating to proxy: {proxy_url}")
-        
-        # Configure scholarly to use this proxy
-        try:
-            # Initialize a new proxy generator
-            self.proxy_generator = ProxyGenerator()
-            
-            success = False
-            
-            # Configure proxy based on its type
-            if proxy_url.startswith('http://') or proxy_url.startswith('https://'):
-                # HTTP proxy
-                success = self.proxy_generator.SingleProxy(
-                    http=proxy_url,
-                    https=proxy_url.replace('http:', 'https:') if proxy_url.startswith('http:') else proxy_url
-                )
-                
-            elif proxy_url.startswith('socks4://'):
-                # SOCKS4 proxy
-                host_port = proxy_url.replace('socks4://', '')
-                if ':' in host_port:
-                    host, port = host_port.split(':')
-                    success = self.proxy_generator.Socks4(
-                        host=host,
-                        port=int(port)
-                    )
-                    
-            elif proxy_url.startswith('socks5://'):
-                # SOCKS5 proxy
-                host_port = proxy_url.replace('socks5://', '')
-                if ':' in host_port:
-                    host, port = host_port.split(':')
-                    success = self.proxy_generator.Socks5(
-                        host=host,
-                        port=int(port)
-                    )
-                    
+            # Get proxies of the requested type
+            if proxy_type == "http":
+                proxies = self.http_proxies
+            elif proxy_type == "socks4":
+                proxies = self.socks4_proxies
+            elif proxy_type == "socks5":
+                proxies = self.socks5_proxies
             else:
-                # Unknown protocol
-                logger.error(f"Unsupported proxy protocol: {proxy_url}")
-                self.failed_proxies.add(proxy_url)
-                return self.rotate_proxy(force=True)  # Try another proxy
+                proxies = self.proxies
+            
+            # Filter out failed proxies
+            available = [p for p in proxies if p not in self.failed_proxies]
+            return available
+    
+    def configure_scholarly_with_proxy(self, proxy: str) -> bool:
+        """Configure scholarly with the given proxy.
+        
+        Args:
+            proxy: Proxy string in format "protocol://ip:port"
+            
+        Returns:
+            True if configured successfully, False otherwise
+        """
+        try:
+            protocol, host, port = ProxyListDownloader.parse_proxy(proxy)
+            pg = ProxyGenerator()
+            
+            if protocol == "http":
+                success = pg.SingleProxy(
+                    http=f"http://{host}:{port}",
+                    https=f"http://{host}:{port}"
+                )
+            elif protocol == "socks4":
+                success = pg.SingleProxy(
+                    http=f"socks4://{host}:{port}",
+                    https=f"socks4://{host}:{port}"
+                )
+            elif protocol == "socks5":
+                success = pg.SingleProxy(
+                    http=f"socks5://{host}:{port}",
+                    https=f"socks5://{host}:{port}"
+                )
+            else:
+                logger.error(f"Unsupported protocol: {protocol}")
+                return False
             
             if success:
-                # Apply the proxy to scholarly
-                scholarly.use_proxy(self.proxy_generator)
-                self.last_rotation_time = current_time
-                self.setup_done = True
-                logger.info(f"Proxy rotation successful")
+                scholarly.use_proxy(pg)
+                self.current_proxy = proxy
+                logger.info(f"Configured scholarly with proxy: {proxy}")
                 return True
-            else:
-                logger.error(f"Failed to configure proxy: {proxy_url}")
-                self.failed_proxies.add(proxy_url)
-                return self.rotate_proxy(force=True)  # Try another proxy
-                
-        except Exception as e:
-            logger.exception(f"Error during proxy rotation: {str(e)}")
-            self.failed_proxies.add(proxy_url)
-            return self.rotate_proxy(force=True)  # Try another proxy
             
-    def ensure_proxy_setup(self):
-        """Ensure that a proxy is set up for scholarly"""
-        if not self.setup_done:
-            return self.rotate_proxy(force=True)
-        return True
-
-    def handle_error(self, error_type=None):
-        """
-        Handle errors by potentially rotating the proxy
+            logger.warning(f"Failed to configure proxy: {proxy}")
+            return False
+            
+        except (ValueError, Exception) as e:
+            logger.error(f"Error configuring proxy {proxy}: {str(e)}")
+            return False
+    
+    def rotate_proxy(self, preferred_type: Optional[str] = None) -> bool:
+        """Rotate to a new proxy.
         
         Args:
-            error_type: Type of error encountered (optional)
+            preferred_type: Preferred proxy type ('http', 'socks4', 'socks5')
             
         Returns:
-            bool: True if proxy was rotated
+            True if rotated successfully, False otherwise
         """
-        # Mark current proxy as failed
-        if self.current_proxy_index >= 0 and self.current_proxy_index < len(self.proxies):
-            proxy_url = self.proxies[self.current_proxy_index]
-            self.failed_proxies.add(proxy_url)
+        # Check if we need to refresh the proxy list
+        self.check_refresh_needed()
         
-        # For certain errors, immediately rotate the proxy
-        if error_type in ['403', 'captcha', 'timeout', 'connection']:
-            logger.warning(f"Received {error_type} error, forcing proxy rotation")
-            return self.rotate_proxy(force=True)
+        # Try with preferred type
+        if preferred_type:
+            available = self.get_available_proxies(preferred_type)
+            if available:
+                proxy = random.choice(available)
+                if self.configure_scholarly_with_proxy(proxy):
+                    return True
         
-        # For other errors, just ensure we have a proxy but don't force rotation
-        return self.ensure_proxy_setup()
+        # Try with any type
+        available = self.get_available_proxies()
+        if not available:
+            logger.error("No available proxies!")
+            # Force refresh the list if we're out of proxies
+            self.refresh_proxy_list()
+            available = self.get_available_proxies()
+            if not available:
+                return False
+        
+        # Shuffle and try proxies until one works
+        random.shuffle(available)
+        for proxy in available[:5]:  # Try up to 5 proxies to avoid long delays
+            if self.configure_scholarly_with_proxy(proxy):
+                return True
+        
+        logger.error("Failed to configure any proxy after multiple attempts")
+        return False
 
-# Create a global instance for easy import
-proxy_rotator = ScholarlyProxyRotator()
 
-# Export utility functions for easy use in views
+# Global instance for use across the application
+proxy_rotator = ScholarlyProxyRotator(
+    refresh_interval_minutes=getattr(settings, "PROXY_REFRESH_INTERVAL_MINUTES", 60)
+)
 
-def rotate_scholarly_proxy(force=False):
-    """Rotate the scholarly proxy"""
-    return proxy_rotator.rotate_proxy(force=force)
 
-def handle_scholarly_error(error_type=None):
-    """Handle scholarly errors with potential proxy rotation"""
-    return proxy_rotator.handle_error(error_type)
-
-def ensure_scholarly_proxy():
-    """Ensure scholarly has a proxy configured"""
-    return proxy_rotator.ensure_proxy_setup()
-
-def refresh_proxy_list():
-    """Force refresh of the proxy list"""
-    return proxy_rotator._refresh_proxies()
+class ProxyMiddleware:
+    """Django middleware for handling proxy-related errors."""
+    
+    def __init__(self, get_response):
+        self.get_response = get_response
+    
+    def __call__(self, request):
+        return self.get_response(request)
+    
+    def process_exception(self, request, exception):
+        """Process exceptions and rotate proxy if needed."""
+        if hasattr(exception, "__module__") and exception.__module__ == 'scholarly':
+            if proxy_rotator.current_proxy:
+                proxy_rotator.mark_proxy_failed(proxy_rotator.current_proxy)
+            
+            # Try rotating to a new proxy
+            proxy_rotator.rotate_proxy()
+            return None
+        return None

@@ -12,7 +12,8 @@ from rest_framework import status
 from scholarly import scholarly
 
 # Import our custom proxy manager
-from .proxy import DirectProxyManager, direct_proxy_rotation
+from .proxy_decorator import direct_proxy_rotation
+from .proxy_rotator import proxy_rotator
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -25,61 +26,61 @@ MAX_PUBLICATIONS = 50
 MAX_CITATIONS = 100
 
 # API Views
-@api_view(['POST'])
-def refresh_proxies(request):
-    """
-    Manually refresh the proxy list.
+# @api_view(['POST'])
+# def refresh_proxies(request):
+#     """
+#     Manually refresh the proxy list.
     
-    Returns a success message if successful, or an error response if not.
-    """
-    try:
-        if DirectProxyManager.refresh_proxies():
-            return Response(
-                {"success": True, "message": "Proxy list refreshed successfully!"}, 
-                status=status.HTTP_200_OK
-            )
-        else:
-            return Response(
-                {"success": False, "message": "Failed to refresh proxy list."}, 
-                status=status.HTTP_503_SERVICE_UNAVAILABLE
-            )
+#     Returns a success message if successful, or an error response if not.
+#     """
+#     try:
+        # if DirectProxyManager.refresh_proxies():
+#             return Response(
+#                 {"success": True, "message": "Proxy list refreshed successfully!"}, 
+#                 status=status.HTTP_200_OK
+#             )
+#         else:
+#             return Response(
+#                 {"success": False, "message": "Failed to refresh proxy list."}, 
+#                 status=status.HTTP_503_SERVICE_UNAVAILABLE
+#             )
             
-    except Exception as e:
-        logger.exception("Error refreshing proxies")
-        return Response(
-            {"success": False, "error": str(e)}, 
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+#     except Exception as e:
+#         logger.exception("Error refreshing proxies")
+#         return Response(
+#             {"success": False, "error": str(e)}, 
+#             status=status.HTTP_500_INTERNAL_SERVER_ERROR
+#         )
 
-@api_view(['POST'])
-def rotate_proxy(request):
-    """
-    Manually rotate to the next proxy.
+# @api_view(['POST'])
+# def rotate_proxy(request):
+#     """
+#     Manually rotate to the next proxy.
     
-    Returns a success message if successful, or an error response if not.
-    """
-    try:
-        if DirectProxyManager.rotate_proxy():
-            current_proxy = DirectProxyManager.get_current_proxy()
-            return Response(
-                {"success": True, "message": f"Rotated to proxy: {current_proxy}"}, 
-                status=status.HTTP_200_OK
-            )
-        else:
-            return Response(
-                {"success": False, "message": "Failed to rotate proxy."}, 
-                status=status.HTTP_503_SERVICE_UNAVAILABLE
-            )
+#     Returns a success message if successful, or an error response if not.
+#     """
+#     try:
+        # if DirectProxyManager.rotate_proxy():
+            # current_proxy = DirectProxyManager.get_current_proxy()
+#             return Response(
+#                 {"success": True, "message": f"Rotated to proxy: {current_proxy}"}, 
+#                 status=status.HTTP_200_OK
+#             )
+#         else:
+#             return Response(
+#                 {"success": False, "message": "Failed to rotate proxy."}, 
+#                 status=status.HTTP_503_SERVICE_UNAVAILABLE
+#             )
             
-    except Exception as e:
-        logger.exception("Error rotating proxy")
-        return Response(
-            {"success": False, "error": str(e)}, 
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+#     except Exception as e:
+#         logger.exception("Error rotating proxy")
+#         return Response(
+#             {"success": False, "error": str(e)}, 
+#             status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        # )
 
 @api_view(['GET'])
-@direct_proxy_rotation
+# @direct_proxy_rotation
 def get_authors(request):
     """
     Search for authors by name with pagination.
@@ -122,7 +123,7 @@ def get_authors(request):
         authors.append(author)
         if len(authors) >= limit * page:
             break
-        DirectProxyManager.add_random_delay(0.5, 2.0)
+        # DirectProxyManager.add_random_delay(0.5, 2.0)
 
     # Handle pagination
     paginator = Paginator(authors, limit)
@@ -153,7 +154,7 @@ def get_authors(request):
     return Response(response_data, status=status.HTTP_200_OK)
         
 @api_view(['GET'])
-@direct_proxy_rotation
+# @direct_proxy_rotation
 def get_authors_compact(request):
     """
     Get a compact list of authors by name (limited to 10 results).
@@ -179,7 +180,7 @@ def get_authors_compact(request):
         authors.append(author)
         if len(authors) >= 10:
             break
-        DirectProxyManager.add_random_delay(0.5, 1.5)
+        # DirectProxyManager.add_random_delay(0.5, 1.5)
 
     if not authors:
         return Response(
@@ -191,7 +192,7 @@ def get_authors_compact(request):
     return Response(response_data, status=status.HTTP_200_OK)
         
 @api_view(['GET'])
-@direct_proxy_rotation
+@direct_proxy_rotation(max_retries=3)
 def get_author_by_name(request):
     """
     Get detailed information for a single author by name.
@@ -210,9 +211,11 @@ def get_author_by_name(request):
             status=status.HTTP_400_BAD_REQUEST
         )
 
-    search_query = scholarly.search_author(author)
-    
+    # Log which proxy we're using
+    logger.info(f"Searching for author '{author}' using proxy: {proxy_rotator.current_proxy}")
+
     try:
+        search_query = scholarly.search_author(author)
         author_result = next(search_query)
         result = scholarly.fill(author_result)
     except StopIteration:
@@ -220,11 +223,14 @@ def get_author_by_name(request):
             {"error": "No author found matching the search criteria"}, 
             status=status.HTTP_404_NOT_FOUND
         )
+    except Exception as e:
+        # This will be caught by our decorator, which will retry with a different proxy
+        logger.error(f"Error searching for author '{author}': {str(e)}")
+        raise
 
-    return Response(result, status=status.HTTP_200_OK)
-        
+    return Response(result, status=status.HTTP_200_OK)        
 @api_view(["GET"])
-@direct_proxy_rotation
+# @direct_proxy_rotation
 def get_author_by_id(request, id):
     """
     Get author information by Scholar ID.
@@ -252,7 +258,7 @@ def get_author_by_id(request, id):
     return Response(author_detail, status=status.HTTP_200_OK) 
     
 @api_view(["GET"])
-@direct_proxy_rotation
+# @direct_proxy_rotation
 def get_author_detail(request, id):
     """
     Get detailed author information including publications by Scholar ID.
@@ -286,7 +292,7 @@ def get_author_detail(request, id):
         for pub in pub_generator:
             publications.append(pub)
             # Add random delay between publication fetches
-            DirectProxyManager.add_random_delay(1.0, 3.0)
+            # DirectProxyManager.add_random_delay(1.0, 3.0)
             
             # Limit the number of publications
             if len(publications) >= MAX_PUBLICATIONS:
@@ -305,7 +311,7 @@ def get_author_detail(request, id):
     return Response(response_data, status=status.HTTP_200_OK)
     
 @api_view(["GET"])
-@direct_proxy_rotation
+# @direct_proxy_rotation
 def get_pub_detail(request, query):
     """
     Get detailed information for a publication by search query.
@@ -327,7 +333,7 @@ def get_pub_detail(request, query):
     try:
         pub = next(pub_query)
         # Add delay to mimic human behavior
-        DirectProxyManager.add_random_delay(1.0, 2.0)
+        # DirectProxyManager.add_random_delay(1.0, 2.0)
         
         # Fill publication details
         pub_detail = scholarly.fill(pub)
@@ -339,7 +345,7 @@ def get_pub_detail(request, query):
         )
 
 @api_view(["GET"])
-@direct_proxy_rotation
+# @direct_proxy_rotation
 def get_pub_detail_with_citations(request, query):
     """
     Get detailed information for a publication with its citations.
@@ -381,7 +387,7 @@ def get_pub_detail_with_citations(request, query):
         # Process each citing publication and fill in details
         for citation in citations_generator:
             # Add random delay between citation fetches
-            DirectProxyManager.add_random_delay(1.5, 3.0)
+            # DirectProxyManager.add_random_delay(1.5, 3.0)
             
             try:
                 filled_citation = scholarly.fill(citation)

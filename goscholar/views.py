@@ -15,7 +15,8 @@ from rest_framework import status
 from scholarly import scholarly, ProxyGenerator
 
 # Import our custom proxy manager
-# from .proxy import DirectProxyManager, direct_proxy_rotation
+from .proxy_decorator import direct_proxy_rotation
+from .proxy_rotator import proxy_rotator
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -28,92 +29,59 @@ MAX_PUBLICATIONS = 50
 MAX_CITATIONS = 100
 
 # API Views
-import requests
-import time
-
-proxy_lock = threading.Lock()
-_proxy_cache = {'list': [], 'timestamp': 0, 'ttl_seconds': 300}
-
-class ProxyManager:
-    """
-    Thread-local proxy manager with TTL cache and health checks.
-    """
-    _local = local()
-    PROXY_SOURCE_URL = "https://raw.githubusercontent.com/monosans/proxy-list/refs/heads/main/proxies/socks5.txt"
-    CACHE_TTL = 300  # seconds
-
-    def __init__(self):
-        # initialize thread-local storage
-        if not hasattr(self._local, 'cache'):
-            self._local.cache = {'list': [], 'timestamp': 0}
-            self._local.backoff = {}
-
-    def _fetch_proxies(self):
-        """Fetch fresh proxies from source, cache them with TTL."""
-        now = time.time()
-        cache = self._local.cache
-        if now - cache['timestamp'] < self.CACHE_TTL:
-            return cache['list']
-
-        try:
-            resp = requests.get(self.PROXY_SOURCE_URL, timeout=10)
-            resp.raise_for_status()
-            proxies = [
-                line.strip()
-                for line in resp.text.splitlines()
-                if line.strip() and ':' in line
-            ]
-            random.shuffle(proxies)
-            cache.update({'list': proxies, 'timestamp': now})
-            return proxies
-        except requests.RequestException as e:
-            logger.warning(f"Proxy fetch failed: {e}")
-            return cache['list']
-
-    def _health_check(self, proxy: str) -> bool:
-        """Quick HEAD request to Google Scholar to verify proxy works."""
-        try:
-            requests.head(
-                "https://scholar.google.com",
-                proxies={'http': proxy, 'https': proxy},
-                timeout=5
-            )
-            return True
-        except Exception:
-            return False
-
-    def get_next(self):
-        """
-        Return next healthy proxy or None if exhausted.
-        Implements simple circuit-breaker: failing proxies are retired for 5m.
-        """
-        proxies = self._fetch_proxies()
-        for p in proxies:
-            # skip if in back-off
-            bo = self._local.backoff.get(p, 0)
-            if time.time() < bo:
-                continue
-            if self._health_check(p):
-                return p
-            # retire for 5m
-            self._local.backoff[p] = time.time() + 300
-        return None
-
-    def apply(self, proxy: str):
-        """
-        Configure scholarly with a fresh, single-use ProxyGenerator.
-        Always call scholarly.use_proxy(None) after your operation.
-        """
-        pg = ProxyGenerator()
-        if proxy:
-            success = pg.SingleProxy(http=proxy, https=proxy)
-            if not success:
-                raise RuntimeError(f"SingleProxy failed for {proxy}")
-            scholarly.use_proxy(pg)
-        else:
-            scholarly.use_proxy(None, None)
-
+# @api_view(['POST'])
+# def refresh_proxies(request):
+#     """
+#     Manually refresh the proxy list.
     
+#     Returns a success message if successful, or an error response if not.
+#     """
+#     try:
+        # if DirectProxyManager.refresh_proxies():
+#             return Response(
+#                 {"success": True, "message": "Proxy list refreshed successfully!"}, 
+#                 status=status.HTTP_200_OK
+#             )
+#         else:
+#             return Response(
+#                 {"success": False, "message": "Failed to refresh proxy list."}, 
+#                 status=status.HTTP_503_SERVICE_UNAVAILABLE
+#             )
+            
+#     except Exception as e:
+#         logger.exception("Error refreshing proxies")
+#         return Response(
+#             {"success": False, "error": str(e)}, 
+#             status=status.HTTP_500_INTERNAL_SERVER_ERROR
+#         )
+
+# @api_view(['POST'])
+# def rotate_proxy(request):
+#     """
+#     Manually rotate to the next proxy.
+    
+#     Returns a success message if successful, or an error response if not.
+#     """
+#     try:
+        # if DirectProxyManager.rotate_proxy():
+            # current_proxy = DirectProxyManager.get_current_proxy()
+#             return Response(
+#                 {"success": True, "message": f"Rotated to proxy: {current_proxy}"}, 
+#                 status=status.HTTP_200_OK
+#             )
+#         else:
+#             return Response(
+#                 {"success": False, "message": "Failed to rotate proxy."}, 
+#                 status=status.HTTP_503_SERVICE_UNAVAILABLE
+#             )
+            
+#     except Exception as e:
+#         logger.exception("Error rotating proxy")
+#         return Response(
+#             {"success": False, "error": str(e)}, 
+#             status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        # )
+
 @api_view(['GET'])
 # @direct_proxy_rotation
 def get_authors(request):
@@ -231,42 +199,43 @@ def get_authors_compact(request):
 # from .utils import get_proxy_list # Assuming you put get_proxy_list in a utils file
 
 @api_view(['GET'])
+@direct_proxy_rotation(max_retries=3)
 def get_author_by_name(request):
-    author_name = request.GET.get('author')
-    if not author_name:
-        return Response({'error': 'Author parameter is required'}, status=status.HTTP_400_BAD_REQUEST)
+    """
+    Get detailed information for a single author by name.
+    
+    Query Parameters:
+        author (str): Name of the author to search
+        
+    Returns:
+        Response: Detailed author information
+    """
+    author = request.GET.get('author')
 
-    pm = ProxyManager()
-    max_attempts = 5
-    last_error = None
-
-    for attempt in range(1, max_attempts + 1):
-        proxy = pm.get_next()
-        proxy_info = proxy or "No Proxy"
-        logger.debug(f"Attempt {attempt}/{max_attempts} with {proxy_info}")
-
-        try:
-            pm.apply(proxy)
-            search_gen = scholarly.search_author(author_name)
-            author = next(search_gen)
-            author = scholarly.fill(author)
-            return Response(author, status=status.HTTP_200_OK)
-        except StopIteration:
-            last_error = "No author found"
-        except Exception as e:
-            last_error = str(e)
-        finally:
-            scholarly.use_proxy(None, None)
-
-    if last_error == "No author found":
+    if not author:
         return Response(
-            {"error": f"No author matching '{author_name}' after {max_attempts} attempts."},
+            {"error": "Author parameter is required"}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # Log which proxy we're using
+    logger.info(f"Searching for author '{author}' using proxy: {proxy_rotator.current_proxy}")
+
+    try:
+        search_query = scholarly.search_author(author)
+        author_result = next(search_query)
+        result = scholarly.fill(author_result)
+    except StopIteration:
+        return Response(
+            {"error": "No author found matching the search criteria"}, 
             status=status.HTTP_404_NOT_FOUND
         )
-    return Response(
-        {"error": f"Failed after {max_attempts} attempts. Last error: {last_error}"},
-        status=status.HTTP_500_INTERNAL_SERVER_ERROR
-    )
+    except Exception as e:
+        # This will be caught by our decorator, which will retry with a different proxy
+        logger.error(f"Error searching for author '{author}': {str(e)}")
+        raise
+
+    return Response(result, status=status.HTTP_200_OK)
         
 @api_view(["GET"])
 # @direct_proxy_rotation

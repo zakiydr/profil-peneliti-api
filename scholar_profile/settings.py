@@ -35,6 +35,15 @@ ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "").split(",")
 
 CSRF_TRUSTED_ORIGINS = os.environ.get("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",")
 
+# How often to refresh the proxy list (in minutes)
+PROXY_REFRESH_INTERVAL_MINUTES = 120  # Refresh every 2 hours
+
+# How long to wait before retrying a failed proxy (in minutes)
+PROXY_FAILURE_TIMEOUT_MINUTES = 30
+
+import requests
+requests.packages.urllib3.util.ssl_.DEFAULT_CIPHERS = 'ALL:@SECLEVEL=1'
+
 # Application definition
 
 INSTALLED_APPS = [
@@ -78,6 +87,7 @@ REST_FRAMEWORK = {
 
 MIDDLEWARE = [
     # 'goscholar.middleware.ProxyManager',
+    'goscholar.proxy_rotator.ProxyMiddleware',
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.security.SecurityMiddleware",
@@ -97,20 +107,41 @@ MIDDLEWARE = [
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
-    'handlers': {
-        'console': {
-            'class': 'logging.StreamHandler',
+
+    'formatters': {
+        'verbose': {
+            'format': '%(levelname)s %(asctime)s %(module)s %(process)d %(thread)d: %(message)s',
+            'datefmt': '%Y-%m-%d %H:%M:%S',
+        },
+        'simple': {
+            'format': '%(levelname)s %(message)s',
         },
     },
+
+    'handlers': {
+        'console': {
+            'level': 'INFO',
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',   # now defined above
+        },
+        'file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': 'proxy_rotation.log',
+            'formatter': 'verbose',   # also works here
+        },
+    },
+
     'root': {
         'handlers': ['console'],
         'level': 'INFO',
     },
+
     'loggers': {
-        'goscholar': {
-            'handlers': ['console'],
+        'goscholar.proxy_rotator': {
+            'handlers': ['console', 'file'],
             'level': 'INFO',
-            'propagate': False,
+            'propagate': True,
         },
     },
 }

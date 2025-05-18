@@ -1,0 +1,58 @@
+INFO 2025-05-16 21:40:28 proxy_rotator 18380 15956: Downloaded 384 proxies from GitHub
+INFO 2025-05-16 21:40:28 proxy_rotator 18380 15956: Refreshed proxy list: 167 HTTP, 90 SOCKS4, 127 SOCKS5
+INFO 2025-05-16 21:40:28 proxy_rotator 18380 15956: Downloaded 384 proxies from GitHub
+INFO 2025-05-16 21:40:28 proxy_rotator 18380 15956: Refreshed proxy list: 167 HTTP, 90 SOCKS4, 127 SOCKS5
+INFO 2025-05-16 21:42:35 proxy_rotator 13332 1668: Downloaded 384 proxies from GitHub
+INFO 2025-05-16 21:42:35 proxy_rotator 13332 1668: Refreshed proxy list: 167 HTTP, 90 SOCKS4, 127 SOCKS5
+INFO 2025-05-16 21:42:35 proxy_rotator 13332 1668: Downloaded 384 proxies from GitHub
+INFO 2025-05-16 21:42:35 proxy_rotator 13332 1668: Refreshed proxy list: 167 HTTP, 90 SOCKS4, 127 SOCKS5
+INFO 2025-05-16 21:42:35 proxy_rotator 13332 1668: Downloaded 384 proxies from GitHub
+INFO 2025-05-16 21:42:35 proxy_rotator 13332 1668: Refreshed proxy list: 167 HTTP, 90 SOCKS4, 127 SOCKS5
+ERROR 2025-05-16 21:42:37 proxy_rotator 13332 1668: Error configuring proxy http://195.181.164.156:4222: Client.__init__() got an unexpected keyword argument 'proxies'
+ERROR 2025-05-16 21:42:40 proxy_rotator 13332 1668: Error configuring proxy http://195.181.164.155:4145: Client.__init__() got an unexpected keyword argument 'proxies'
+ERROR 2025-05-16 21:42:43 proxy_rotator 13332 1668: Error configuring proxy http://51.96.162.162:3128: Client.__init__() got an unexpected keyword argument 'proxies'
+WARNING 2025-05-16 21:42:48 proxy_rotator 13332 1668: Failed to configure proxy: http://134.209.29.120:8080
+ERROR 2025-05-16 21:42:51 proxy_rotator 13332 1668: Error configuring proxy http://198.199.86.11:80: Client.__init__() got an unexpected keyword argument 'proxies'
+ERROR 2025-05-16 21:42:52 proxy_rotator 13332 1668: Error configuring proxy http://194.183.190.10:8080: Client.__init__() got an unexpected keyword argument 'proxies'
+ERROR 2025-05-16 21:42:54 proxy_rotator 13332 1668: Error configuring proxy http://185.142.131.113:8080: Client.__init__() got an unexpected keyword argument 'proxies'
+ERROR 2025-05-16 21:42:56 proxy_rotator 13332 1668: Error configuring proxy http://198.199.86.11:8080: Client.__init__() got an unexpected keyword argument 'proxies'
+ERROR 2025-05-16 21:42:59 proxy_rotator 13332 1668: Error configuring proxy http://161.35.70.249:3128: Client.__init__() got an unexpected keyword argument 'proxies'
+ERROR 2025-05-16 21:43:05 proxy_rotator 13332 1668: Error configuring proxy http://134.209.29.120:80: Client.__init__() got an unexpected keyword argument 'proxies'
+INFO 2025-05-16 21:43:45 proxy_rotator 2208 12876: Downloaded 384 proxies from GitHub
+INFO 2025-05-16 21:43:45 proxy_rotator 2208 12876: Refreshed proxy list: 167 HTTP, 90 SOCKS4, 127 SOCKS5
+INFO 2025-05-16 21:43:46 proxy_rotator 2208 12876: Downloaded 384 proxies from GitHub
+INFO 2025-05-16 21:43:46 proxy_rotator 2208 12876: Refreshed proxy list: 167 HTTP, 90 SOCKS4, 127 SOCKS5
+INFO 2025-05-16 21:43:46 proxy_rotator 2208 12876: Downloaded 384 proxies from GitHub
+INFO 2025-05-16 21:43:47 proxy_rotator 2208 12876: Refreshed proxy list: 167 HTTP, 90 SOCKS4, 127 SOCKS5
+ERROR 2025-05-16 21:43:50 proxy_rotator 2208 12876: Error configuring proxy socks5://161.35.31.237:1080: Client.__init__() got an unexpected keyword argument 'proxies'
+ERROR 2025-05-16 21:43:53 proxy_rotator 2208 12876: Error configuring proxy socks5://185.93.89.163:15497: Client.__init__() got an unexpected keyword argument 'proxies'
+ERROR 2025-05-16 21:43:55 proxy_rotator 2208 12876: Error configuring proxy socks5://146.70.164.210:1080: Client.__init__() got an unexpected keyword argument 'proxies'
+ERROR 2025-05-16 21:43:59 proxy_rotator 2208 12876: Error configuring proxy socks5://185.93.89.151:16361: Client.__init__() got an unexpected keyword argument 'proxies'
+ERROR 2025-05-16 21:44:05 proxy_rotator 2208 12876: Error configuring proxy socks5://172.104.129.235:1080: Client.__init__() got an unexpected keyword argument 'proxies'
+ERROR 2025-05-16 21:44:08 proxy_rotator 2208 12876: Error configuring proxy socks5://161.35.82.57:1080: Client.__init__() got an unexpected keyword argument 'proxies'
+ERROR 2025-05-16 21:44:11 proxy_rotator 2208 12876: Error configuring proxy socks5://172.234.67.180:1080: Client.__init__() got an unexpected keyword argument 'proxies'
+ERROR 2025-05-16 21:44:15 proxy_rotator 2208 12876: Error configuring proxy socks5://173.212.239.181:19016: Client.__init__() got an unexpected keyword argument 'proxies'
+ERROR 2025-05-16 21:44:18 proxy_rotator 2208 12876: Error configuring proxy socks5://45.12.132.188:51991: Client.__init__() got an unexpected keyword argument 'proxies'
+WARNING 2025-05-16 21:44:24 proxy_rotator 2208 12876: Failed to configure proxy: socks5://45.12.132.212:51991
+INFO 2025-05-17 01:38:41 proxy_rotator 13652 16872: Downloaded 550 proxies from GitHub
+INFO 2025-05-17 01:38:41 proxy_rotator 13652 16872: Refreshed proxy list: 92 HTTP, 195 SOCKS4, 263 SOCKS5
+INFO 2025-05-17 01:38:42 proxy_rotator 13652 16872: Downloaded 550 proxies from GitHub
+INFO 2025-05-17 01:38:42 proxy_rotator 13652 16872: Refreshed proxy list: 92 HTTP, 195 SOCKS4, 263 SOCKS5
+INFO 2025-05-17 01:38:42 proxy_rotator 13652 16872: Downloaded 550 proxies from GitHub
+INFO 2025-05-17 01:38:42 proxy_rotator 13652 16872: Refreshed proxy list: 92 HTTP, 195 SOCKS4, 263 SOCKS5
+ERROR 2025-05-17 01:38:44 proxy_rotator 13652 16872: Error configuring proxy socks4://45.12.132.188:51991: Client.__init__() got an unexpected keyword argument 'proxies'
+ERROR 2025-05-17 01:38:45 proxy_rotator 13652 16872: Error configuring proxy socks4://161.35.82.57:1080: Client.__init__() got an unexpected keyword argument 'proxies'
+ERROR 2025-05-17 01:38:48 proxy_rotator 13652 16872: Error configuring proxy socks4://195.182.192.205:1085: Client.__init__() got an unexpected keyword argument 'proxies'
+ERROR 2025-05-17 01:38:49 proxy_rotator 13652 16872: Error configuring proxy socks4://46.107.230.122:1080: Client.__init__() got an unexpected keyword argument 'proxies'
+ERROR 2025-05-17 01:38:52 proxy_rotator 13652 16872: Error configuring proxy socks4://172.234.67.180:1080: Client.__init__() got an unexpected keyword argument 'proxies'
+INFO 2025-05-17 03:01:10 proxy_rotator 24096 16524: Downloaded 734 proxies from GitHub
+INFO 2025-05-17 03:01:10 proxy_rotator 24096 16524: Refreshed proxy list: 128 HTTP, 199 SOCKS4, 407 SOCKS5
+INFO 2025-05-17 03:01:10 proxy_rotator 24096 16524: Downloaded 734 proxies from GitHub
+INFO 2025-05-17 03:01:10 proxy_rotator 24096 16524: Refreshed proxy list: 128 HTTP, 199 SOCKS4, 407 SOCKS5
+INFO 2025-05-17 03:01:11 proxy_rotator 24096 16524: Downloaded 734 proxies from GitHub
+INFO 2025-05-17 03:01:11 proxy_rotator 24096 16524: Refreshed proxy list: 128 HTTP, 199 SOCKS4, 407 SOCKS5
+ERROR 2025-05-17 03:01:12 proxy_rotator 24096 16524: Error configuring proxy socks4://172.233.254.134:1080: Client.__init__() got an unexpected keyword argument 'proxies'
+ERROR 2025-05-17 03:01:14 proxy_rotator 24096 16524: Error configuring proxy socks4://109.135.16.145:49879: Client.__init__() got an unexpected keyword argument 'proxies'
+ERROR 2025-05-17 03:01:15 proxy_rotator 24096 16524: Error configuring proxy socks4://206.189.57.182:1080: Client.__init__() got an unexpected keyword argument 'proxies'
+ERROR 2025-05-17 03:01:16 proxy_rotator 24096 16524: Error configuring proxy socks4://45.12.132.212:51991: Client.__init__() got an unexpected keyword argument 'proxies'
+ERROR 2025-05-17 03:01:18 proxy_rotator 24096 16524: Error configuring proxy socks4://80.78.73.120:65530: Client.__init__() got an unexpected keyword argument 'proxies'

@@ -15,8 +15,8 @@ from rest_framework import status
 from scholarly import scholarly, ProxyGenerator
 
 # Import our custom proxy manager
-from .proxy_decorator import direct_proxy_rotation
-from .proxy_rotator import proxy_rotator
+# from .proxy_decorator import direct_proxy_rotation
+# from .proxy_rotator import proxy_rotator
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -250,7 +250,7 @@ def get_author_by_name(request):
             )
 
         # Log which proxy we're using
-        logger.info(f"Searching for author '{author}' using proxy: {proxy_rotator.current_proxy}")
+        # logger.info(f"Searching for author '{author}' using proxy: {proxy_rotator.current_proxy}")
 
         try:
             search_query = scholarly.search_author(author)

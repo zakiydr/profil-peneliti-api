@@ -199,7 +199,6 @@ def get_authors_compact(request):
 # from .utils import get_proxy_list # Assuming you put get_proxy_list in a utils file
 
 @api_view(['GET'])
-@direct_proxy_rotation(max_retries=3)
 def get_author_by_name(request):
     """
     Get detailed information for a single author by name.
@@ -211,33 +210,64 @@ def get_author_by_name(request):
     Returns:
         Response: Detailed author information
     """
-    author = request.GET.get('author')
-
-    if not author:
-        return Response(
-            {"error": "Author parameter is required"}, 
-            status=status.HTTP_400_BAD_REQUEST
-        )
-
-    # Log which proxy we're using
-    logger.info(f"Searching for author '{author}' using proxy: {proxy_rotator.current_proxy}")
-
+    # Setup proxy rotation
     try:
-        search_query = scholarly.search_author(author)
-        author_result = next(search_query)
-        result = scholarly.fill(author_result)
-    except StopIteration:
-        return Response(
-            {"error": "No author found matching the search criteria"}, 
-            status=status.HTTP_404_NOT_FOUND
-        )
-    except Exception as e:
-        # This will be caught by our decorator, which will retry with a different proxy
-        logger.error(f"Error searching for author '{author}': {str(e)}")
-        raise
-
-    return Response(result, status=status.HTTP_200_OK)
+        # Fetch the proxy list
+        proxy_list_url = 'https://raw.githubusercontent.com/monosans/proxy-list/refs/heads/main/proxies/socks5.txt'
+        response = requests.get(proxy_list_url)
+        if response.status_code != 200:
+            logger.warning(f"Failed to fetch proxy list: {response.status_code}")
+            proxies = []
+        else:
+            # Filter out empty lines and parse the proxy list
+            proxies = [line.strip() for line in response.text.split('\n') if line.strip()]
         
+        # Initialize the proxy generator
+        pg = ProxyGenerator()
+        if proxies:
+            # Select a random proxy from the list
+            random_proxy = random.choice(proxies)
+            logger.info(f"Using proxy: {random_proxy}")
+            
+            # Configure the proxy - for SOCKS5 we use the proxy_socks5 method
+            success = pg.SingleProxy(http=random_proxy, https=random_proxy)
+            if not success:
+                logger.warning("Failed to set up SOCKS5 proxy, proceeding without proxy")
+                scholarly.use_proxy(None)
+            else:
+                scholarly.use_proxy(pg)
+        else:
+            logger.warning("No proxies available, proceeding without proxy")
+            scholarly.use_proxy(None)
+        
+        # Process the author search
+        author = request.GET.get('author')
+
+        if not author:
+            return Response(
+                {"error": "Author parameter is required"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Log which proxy we're using
+        logger.info(f"Searching for author '{author}' using proxy: {proxy_rotator.current_proxy}")
+
+        try:
+            search_query = scholarly.search_author(author)
+            author_result = next(search_query)
+            result = scholarly.fill(author_result)
+        except StopIteration:
+            return Response(
+                {"error": "No author found matching the search criteria"}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+    except Exception as e:
+        logger.exception(f"Error retrieving author details by name: {str(e)}")
+        return Response(
+            {'error': f"Failed to retrieve author details: {str(e)}"}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+                
 @api_view(["GET"])
 # @direct_proxy_rotation
 def get_author_by_id(request, id):

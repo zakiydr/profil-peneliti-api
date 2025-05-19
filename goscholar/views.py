@@ -207,7 +207,6 @@ def get_authors_compact(request):
         )
         
 @api_view(['GET'])
-# @rotate_proxy_decorator
 def get_author_by_name(request):
     """
     Get detailed information for a single author by name.
@@ -218,7 +217,37 @@ def get_author_by_name(request):
     Returns:
         Response: Detailed author information
     """
+    # Setup proxy rotation
     try:
+        # Fetch the proxy list
+        proxy_list_url = 'https://raw.githubusercontent.com/monosans/proxy-list/refs/heads/main/proxies/socks5.txt'
+        response = requests.get(proxy_list_url)
+        if response.status_code != 200:
+            logger.warning(f"Failed to fetch proxy list: {response.status_code}")
+            proxies = []
+        else:
+            # Filter out empty lines and parse the proxy list
+            proxies = [line.strip() for line in response.text.split('\n') if line.strip()]
+        
+        # Initialize the proxy generator
+        pg = ProxyGenerator()
+        if proxies:
+            # Select a random proxy from the list
+            random_proxy = random.choice(proxies)
+            logger.info(f"Using proxy: {random_proxy}")
+            
+            # Configure the proxy - for SOCKS5 we use the proxy_socks5 method
+            success = pg.SingleProxy(http=random_proxy, https=random_proxy)
+            if not success:
+                logger.warning("Failed to set up SOCKS5 proxy, proceeding without proxy")
+                scholarly.use_proxy(None)
+            else:
+                scholarly.use_proxy(pg)
+        else:
+            logger.warning("No proxies available, proceeding without proxy")
+            scholarly.use_proxy(None)
+        
+        # Process the author search
         author = request.GET.get('author')
 
         if not author:
@@ -245,8 +274,8 @@ def get_author_by_name(request):
         return Response(
             {'error': f"Failed to retrieve author details: {str(e)}"}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )        
-        
+        )
+                
 @api_view(["GET"])
 # @rotate_proxy_decorator
 def get_author_by_id(request, id):

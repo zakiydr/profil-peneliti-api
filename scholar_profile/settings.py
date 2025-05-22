@@ -107,43 +107,52 @@ MIDDLEWARE = [
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
-
     'formatters': {
+        'django.server': {
+            'format': '[%(server_time)s] %(message)s',
+        },
         'verbose': {
-            'format': '%(levelname)s %(asctime)s %(module)s %(process)d %(thread)d: %(message)s',
+            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+            'style': '{',
             'datefmt': '%Y-%m-%d %H:%M:%S',
         },
         'simple': {
-            'format': '%(levelname)s %(message)s',
+            'format': '{levelname} {message}',
+            'style': '{',
         },
     },
-
     'handlers': {
         'console': {
-            'level': 'INFO',
             'class': 'logging.StreamHandler',
-            'formatter': 'verbose',   # now defined above
+            'formatter': 'verbose',
+        },
+        'django.server': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'django.server',
         },
         'file': {
-            'level': 'INFO',
             'class': 'logging.FileHandler',
-            'filename': 'proxy_rotation.log',
-            'formatter': 'verbose',   # also works here
+            'filename': 'django.log',
+            'formatter': 'verbose',
         },
     },
-
-    'root': {
-        'handlers': ['console'],
-        'level': 'INFO',
-    },
-
     'loggers': {
-        'goscholar.proxy_rotator': {
+        'django': {
             'handlers': ['console', 'file'],
             'level': 'INFO',
             'propagate': True,
         },
-    },
+        'django.server': {
+            'handlers': ['django.server'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'goscholar': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+    }
 }
 
 ROOT_URLCONF = "scholar_profile.urls"

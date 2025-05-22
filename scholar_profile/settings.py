@@ -16,7 +16,7 @@ from corsheaders.defaults import default_methods
 from corsheaders.defaults import default_headers
 from dotenv import load_dotenv
 
-load_dotenv('.env.prod')
+load_dotenv('.env.dev')
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -87,7 +87,7 @@ REST_FRAMEWORK = {
 
 MIDDLEWARE = [
     # 'goscholar.middleware.ProxyManager',
-    'goscholar.proxy_rotator.ProxyMiddleware',
+    # 'goscholar.proxy_rotator.ProxyMiddleware',
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.security.SecurityMiddleware",

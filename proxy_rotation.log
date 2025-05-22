@@ -56,3 +56,57 @@ ERROR 2025-05-17 03:01:14 proxy_rotator 24096 16524: Error configuring proxy soc
 ERROR 2025-05-17 03:01:15 proxy_rotator 24096 16524: Error configuring proxy socks4://206.189.57.182:1080: Client.__init__() got an unexpected keyword argument 'proxies'
 ERROR 2025-05-17 03:01:16 proxy_rotator 24096 16524: Error configuring proxy socks4://45.12.132.212:51991: Client.__init__() got an unexpected keyword argument 'proxies'
 ERROR 2025-05-17 03:01:18 proxy_rotator 24096 16524: Error configuring proxy socks4://80.78.73.120:65530: Client.__init__() got an unexpected keyword argument 'proxies'
+INFO 2025-05-19 15:59:03 proxy_rotator 25108 29632: Downloaded 603 proxies from GitHub
+INFO 2025-05-19 15:59:03 proxy_rotator 25108 29632: Refreshed proxy list: 170 HTTP, 188 SOCKS4, 245 SOCKS5
+INFO 2025-05-19 15:59:03 proxy_rotator 25108 29632: Downloaded 603 proxies from GitHub
+INFO 2025-05-19 15:59:03 proxy_rotator 25108 29632: Refreshed proxy list: 170 HTTP, 188 SOCKS4, 245 SOCKS5
+INFO 2025-05-19 15:59:26 proxy_rotator 24832 27836: Downloaded 603 proxies from GitHub
+INFO 2025-05-19 15:59:26 proxy_rotator 24832 27836: Refreshed proxy list: 170 HTTP, 188 SOCKS4, 245 SOCKS5
+INFO 2025-05-19 15:59:26 proxy_rotator 24832 27836: Downloaded 603 proxies from GitHub
+INFO 2025-05-19 15:59:26 proxy_rotator 24832 27836: Refreshed proxy list: 170 HTTP, 188 SOCKS4, 245 SOCKS5
+INFO 2025-05-19 17:36:09 proxy_rotator 29604 16136: Downloaded 584 proxies from GitHub
+INFO 2025-05-19 17:36:09 proxy_rotator 29604 16136: Refreshed proxy list: 210 HTTP, 158 SOCKS4, 216 SOCKS5
+INFO 2025-05-19 17:36:10 proxy_rotator 29604 16136: Downloaded 584 proxies from GitHub
+INFO 2025-05-19 17:36:10 proxy_rotator 29604 16136: Refreshed proxy list: 210 HTTP, 158 SOCKS4, 216 SOCKS5
+INFO 2025-05-20 20:56:40 proxy_rotator 29236 28084: Downloaded 753 proxies from GitHub
+INFO 2025-05-20 20:56:40 proxy_rotator 29236 28084: Refreshed proxy list: 374 HTTP, 155 SOCKS4, 224 SOCKS5
+INFO 2025-05-20 20:56:41 proxy_rotator 29236 28084: Downloaded 753 proxies from GitHub
+INFO 2025-05-20 20:56:41 proxy_rotator 29236 28084: Refreshed proxy list: 374 HTTP, 155 SOCKS4, 224 SOCKS5
+INFO 2025-05-20 20:56:45 proxy_rotator 36944 27236: Downloaded 753 proxies from GitHub
+INFO 2025-05-20 20:56:45 proxy_rotator 36944 27236: Refreshed proxy list: 374 HTTP, 155 SOCKS4, 224 SOCKS5
+INFO 2025-05-20 20:56:45 proxy_rotator 36944 27236: Downloaded 753 proxies from GitHub
+INFO 2025-05-20 20:56:45 proxy_rotator 36944 27236: Refreshed proxy list: 374 HTTP, 155 SOCKS4, 224 SOCKS5
+INFO 2025-05-20 20:58:42 proxy_rotator 34992 37260: Downloaded 753 proxies from GitHub
+INFO 2025-05-20 20:58:42 proxy_rotator 34992 37260: Refreshed proxy list: 374 HTTP, 155 SOCKS4, 224 SOCKS5
+INFO 2025-05-20 20:58:42 proxy_rotator 34992 37260: Downloaded 753 proxies from GitHub
+INFO 2025-05-20 20:58:42 proxy_rotator 34992 37260: Refreshed proxy list: 374 HTTP, 155 SOCKS4, 224 SOCKS5
+INFO 2025-05-20 20:58:45 proxy_rotator 18184 36228: Downloaded 753 proxies from GitHub
+INFO 2025-05-20 20:58:45 proxy_rotator 18184 36228: Refreshed proxy list: 374 HTTP, 155 SOCKS4, 224 SOCKS5
+INFO 2025-05-20 20:58:45 proxy_rotator 18184 36228: Downloaded 753 proxies from GitHub
+INFO 2025-05-20 20:58:45 proxy_rotator 18184 36228: Refreshed proxy list: 374 HTTP, 155 SOCKS4, 224 SOCKS5
+INFO 2025-05-20 20:59:36 proxy_rotator 36208 18852: Downloaded 753 proxies from GitHub
+INFO 2025-05-20 20:59:36 proxy_rotator 36208 18852: Refreshed proxy list: 374 HTTP, 155 SOCKS4, 224 SOCKS5
+INFO 2025-05-20 20:59:37 proxy_rotator 36208 18852: Downloaded 753 proxies from GitHub
+INFO 2025-05-20 20:59:37 proxy_rotator 36208 18852: Refreshed proxy list: 374 HTTP, 155 SOCKS4, 224 SOCKS5
+INFO 2025-05-20 20:59:48 proxy_rotator 36092 13160: Downloaded 753 proxies from GitHub
+INFO 2025-05-20 20:59:48 proxy_rotator 36092 13160: Refreshed proxy list: 374 HTTP, 155 SOCKS4, 224 SOCKS5
+INFO 2025-05-20 20:59:49 proxy_rotator 36092 13160: Downloaded 753 proxies from GitHub
+INFO 2025-05-20 20:59:49 proxy_rotator 36092 13160: Refreshed proxy list: 374 HTTP, 155 SOCKS4, 224 SOCKS5
+INFO 2025-05-20 21:00:01 proxy_rotator 14164 14192: Downloaded 753 proxies from GitHub
+INFO 2025-05-20 21:00:01 proxy_rotator 14164 14192: Refreshed proxy list: 374 HTTP, 155 SOCKS4, 224 SOCKS5
+INFO 2025-05-20 21:00:01 proxy_rotator 14164 14192: Downloaded 753 proxies from GitHub
+INFO 2025-05-20 21:00:01 proxy_rotator 14164 14192: Refreshed proxy list: 374 HTTP, 155 SOCKS4, 224 SOCKS5
+INFO 2025-05-20 21:00:39 proxy_rotator 26160 15524: Downloaded 753 proxies from GitHub
+INFO 2025-05-20 21:00:39 proxy_rotator 26160 15524: Refreshed proxy list: 374 HTTP, 155 SOCKS4, 224 SOCKS5
+INFO 2025-05-20 21:00:39 proxy_rotator 26160 15524: Downloaded 753 proxies from GitHub
+INFO 2025-05-20 21:00:39 proxy_rotator 26160 15524: Refreshed proxy list: 374 HTTP, 155 SOCKS4, 224 SOCKS5
+INFO 2025-05-20 21:05:27 proxy_rotator 16992 36532: Downloaded 753 proxies from GitHub
+INFO 2025-05-20 21:05:27 proxy_rotator 16992 36532: Refreshed proxy list: 374 HTTP, 155 SOCKS4, 224 SOCKS5
+INFO 2025-05-20 21:05:27 proxy_rotator 16992 36532: Downloaded 753 proxies from GitHub
+INFO 2025-05-20 21:05:27 proxy_rotator 16992 36532: Refreshed proxy list: 374 HTTP, 155 SOCKS4, 224 SOCKS5
+INFO 2025-05-20 21:05:30 proxy_rotator 22056 18048: Downloaded 659 proxies from GitHub
+INFO 2025-05-20 21:05:30 proxy_rotator 22056 18048: Refreshed proxy list: 313 HTTP, 152 SOCKS4, 194 SOCKS5
+INFO 2025-05-20 21:05:30 proxy_rotator 22056 18048: Downloaded 753 proxies from GitHub
+INFO 2025-05-20 21:05:30 proxy_rotator 22056 18048: Refreshed proxy list: 374 HTTP, 155 SOCKS4, 224 SOCKS5
+INFO 2025-05-20 21:17:21 proxy_rotator 2544 15384: Downloaded 659 proxies from GitHub
+INFO 2025-05-20 21:17:21 proxy_rotator 2544 15384: Refreshed proxy list: 313 HTTP, 152 SOCKS4, 194 SOCKS5

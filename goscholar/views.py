@@ -13,10 +13,11 @@ from rest_framework.response import Response
 from rest_framework import status
 
 from scholarly import scholarly, ProxyGenerator
+from scholarly._proxy_generator import MaxTriesExceededException, DOSException # Import specific exceptions
 
 # Import our custom proxy manager
 # from .proxy_decorator import direct_proxy_rotation
-# from .proxy_rotator import proxy_rotator
+# from .proxy_rotator import proxy_rotator 
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -194,79 +195,118 @@ def get_authors_compact(request):
     response_data = {"authors": authors}
     return Response(response_data, status=status.HTTP_200_OK)
         
-# ... (imports remain the same)
-# Use the improved get_proxy_list from above
-# from .utils import get_proxy_list # Assuming you put get_proxy_list in a utils file
-
-@api_view(['GET'])
+@api_view()
 def get_author_by_name(request):
     """
     Get detailed information for a single author by name.
     
     Query Parameters:
         author (str): Name of the author to search
-        refresh_proxies (bool, optional): Force refresh of proxy list before searching
-        
     Returns:
         Response: Detailed author information
     """
-    # Setup proxy rotation
+    author_name = request.GET.get('author')
+    if not author_name:
+        return Response(
+            {"error": "Author parameter is required"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # Fetch an HTTP proxy list
+    # IMPORTANT: Change this URL to the actual URL of an HTTP proxy list
+    http_proxy_list_url = 'https://raw.githubusercontent.com/monosans/proxy-list/refs/heads/main/proxies/http.txt' # EXAMPLE URL
+    proxies = []
     try:
-        # Fetch the proxy list
-        proxy_list_url = 'https://raw.githubusercontent.com/monosans/proxy-list/refs/heads/main/proxies/socks5.txt'
-        response = requests.get(proxy_list_url)
-        if response.status_code != 200:
-            logger.warning(f"Failed to fetch proxy list: {response.status_code}")
-            proxies = []
+        response = requests.get(http_proxy_list_url, timeout=10)
+        if response.status_code == 200:
+            # Assuming format is host:port
+            proxies = [line.strip() for line in response.text.split('\n') if line.strip() and ':' in line]
+            logger.info(f"Successfully fetched {len(proxies)} HTTP proxies.")
         else:
-            # Filter out empty lines and parse the proxy list
-            proxies = [line.strip() for line in response.text.split('\n') if line.strip()]
+            logger.warning(f"Failed to fetch HTTP proxy list: {response.status_code}")
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error fetching HTTP proxy list: {e}")
+
+    pg = ProxyGenerator()
+    proxy_configured = False
+    current_proxy_url = "None"
+
+    if proxies:
+        selected_proxy = random.choice(proxies)
+        # Format as an HTTP proxy URL
+        # Ensure the proxy list provides HTTP proxies, not HTTPS-only proxies for this scheme
+        http_proxy_url = f"http://{selected_proxy}" # Assumes proxies are host:port
+        # If proxies require user/pass: http_proxy_url = f"http://user:pass@{selected_proxy}"
+        current_proxy_url = http_proxy_url
+        logger.info(f"Attempting to use HTTP proxy: {http_proxy_url}")
         
-        # Initialize the proxy generator
-        pg = ProxyGenerator()
-        if proxies:
-            # Select a random proxy from the list
-            random_proxy = random.choice(proxies)
-            logger.info(f"Using proxy: {random_proxy}")
-            
-            # Configure the proxy - for SOCKS5 we use the proxy_socks5 method
-            success = pg.SingleProxy(http=random_proxy, https=random_proxy)
-            if not success:
-                logger.warning("Failed to set up SOCKS5 proxy, proceeding without proxy")
-                scholarly.use_proxy(None)
-            else:
-                scholarly.use_proxy(pg)
+        # For HTTP proxies, you provide the same URL for both http and https parameters
+        # if the proxy supports tunneling HTTPS requests (most do).
+        # Scholarly/httpx will use the HTTP proxy for HTTPS traffic via the CONNECT method.
+        success = pg.SingleProxy(http=http_proxy_url, https=http_proxy_url) 
+        
+        if success:
+            scholarly.use_proxy(pg, pg) # Force usage
+            logger.info(f"Successfully configured scholarly to use HTTP proxy: {http_proxy_url}")
+            proxy_configured = True
         else:
-            logger.warning("No proxies available, proceeding without proxy")
+            logger.warning(f"Failed to set up HTTP proxy {http_proxy_url} in ProxyGenerator. Proceeding without proxy.")
             scholarly.use_proxy(None)
+    else:
+        logger.warning("No HTTP proxies available from the list. Proceeding without proxy.")
+        scholarly.use_proxy(None)
+
+    try:
+        #... (rest of the scholarly search logic as in the previous improved example)...
+        logger.info(f"Searching for author '{author_name}'...")
+        search_query = scholarly.search_author(author_name)
+        author_result = next(search_query, None)
         
-        # Process the author search
-        author = request.GET.get('author')
-
-        if not author:
+        if author_result is None:
+            logger.info(f"No author found matching '{author_name}' from initial search.")
             return Response(
-                {"error": "Author parameter is required"}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # Log which proxy we're using
-        # logger.info(f"Searching for author '{author}' using proxy: {proxy_rotator.current_proxy}")
-
-        try:
-            search_query = scholarly.search_author(author)
-            author_result = next(search_query)
-            result = scholarly.fill(author_result)
-        except StopIteration:
-            return Response(
-                {"error": "No author found matching the search criteria"}, 
+                {"error": "No author found matching the search criteria"},
                 status=status.HTTP_404_NOT_FOUND
             )
-    except Exception as e:
-        logger.exception(f"Error retrieving author details by name: {str(e)}")
+        
+        logger.info(f"Found author: {author_result.get('name', 'N/A')}. Filling details...")
+        filled_author = scholarly.fill(author_result)
+        return Response(filled_author, status=status.HTTP_200_OK)
+
+    except MaxTriesExceededException as e:
+        logger.error(f"Scholarly MaxTriesExceededException for '{author_name}'. Proxy: {current_proxy_url}. Error: {e}", exc_info=True)
         return Response(
-            {'error': f"Failed to retrieve author details: {str(e)}"}, 
+            {'error': f"Failed to retrieve author details after multiple tries (MaxTriesExceededException). Google Scholar may be blocking the proxy or IP. Details: {str(e)}"},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE 
+        )
+    except DOSException as e:
+        logger.error(f"Scholarly DOSException for '{author_name}'. Proxy: {http_proxy_list_url if proxy_configured else 'None'}. Error: {e}", exc_info=True)
+        return Response(
+            {'error': f"Failed to retrieve author details due to perceived DOS attack (DOSException). Details: {str(e)}"},
+            status=status.HTTP_429_TOO_MANY_REQUESTS
+        )
+    except StopIteration: # Should be caught by next(search_query, None) check now
+        logger.warning(f"No author found for '{author_name}' (StopIteration).")
+        return Response(
+            {"error": "No author found matching the search criteria"},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    except Exception as e:
+        logger.exception(f"An unexpected error occurred retrieving author details for '{author_name}'. Proxy: {http_proxy_list_url if proxy_configured else 'None'}. Error: {str(e)}")
+        return Response(
+            {'error': f"An unexpected error occurred: {str(e)}"},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+    finally:
+        # It's good practice to reset proxy settings if they are global,
+        # especially in a server environment, to avoid interference between requests.
+        # However, scholarly.use_proxy modifies global state within the scholarly module.
+        # If each request sets its own proxy, this might be okay, but be mindful.
+        # For true isolation, you might need to run scholarly operations in separate processes
+        # or use a forked version of scholarly that allows instance-based proxy configuration.
+        # For now, we'll assume each API call reconfigures as needed.
+        pass
+
                 
 @api_view(["GET"])
 # @direct_proxy_rotation

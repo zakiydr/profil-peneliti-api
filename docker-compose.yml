@@ -6,13 +6,13 @@ services:
     container_name: profil_periset-docker
     volumes:
       - ./static:/app/staticfiles
-      - ./scholarly_proxy_rotator.py:/app/goscholar/scholarly_proxy_rotator.py
+      # - ./scholarly_proxy_rotator.py:/app/goscholar/scholarly_proxy_rotator.py
     env_file:
       - .env.prod
-    environment:
-      - SCHOLARLY_PROXIES=http://proxy-manager:3128  # Fallback proxy
-    depends_on:
-      - proxy-manager
+    # environment:
+    #   - SCHOLARLY_PROXIES=http://proxy-manager:3128  # Fallback proxy
+    # depends_on:
+    #   - proxy-manager
     networks:
       - app-network
 
@@ -29,17 +29,17 @@ services:
     networks:
       - app-network
 
-  proxy-manager:
-    image: sameersbn/squid:3.5.27-2
-    container_name: proxy-rotation-manager
-    volumes:
-      - ./proxy/squid.conf:/etc/squid/squid.conf:ro
-      - ./proxy/cache:/var/spool/squid
-    ports:
-      - "3128:3128"
-    networks:
-      - app-network
-    restart: always
+  # proxy-manager:
+  #   image: sameersbn/squid:3.5.27-2
+  #   container_name: proxy-rotation-manager
+  #   volumes:
+  #     - ./proxy/squid.conf:/etc/squid/squid.conf:ro
+  #     - ./proxy/cache:/var/spool/squid
+  #   ports:
+  #     - "3128:3128"
+  #   networks:
+  #     - app-network
+  #   restart: always
 
 networks:
   app-network:

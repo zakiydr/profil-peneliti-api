@@ -16,7 +16,7 @@ from corsheaders.defaults import default_methods
 from corsheaders.defaults import default_headers
 from dotenv import load_dotenv
 
-load_dotenv('.env.dev')
+load_dotenv('.env.prod')
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -34,6 +34,15 @@ DEBUG = os.environ.get("DEBUG") == "True"
 ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "").split(",")
 
 CSRF_TRUSTED_ORIGINS = os.environ.get("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",")
+
+# How often to refresh the proxy list (in minutes)
+PROXY_REFRESH_INTERVAL_MINUTES = 120  # Refresh every 2 hours
+
+# How long to wait before retrying a failed proxy (in minutes)
+PROXY_FAILURE_TIMEOUT_MINUTES = 30
+
+import requests
+requests.packages.urllib3.util.ssl_.DEFAULT_CIPHERS = 'ALL:@SECLEVEL=1'
 
 # Application definition
 
@@ -78,6 +87,7 @@ REST_FRAMEWORK = {
 
 MIDDLEWARE = [
     # 'goscholar.middleware.ProxyManager',
+    # 'goscholar.proxy_rotator.ProxyMiddleware',
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.security.SecurityMiddleware",
@@ -97,22 +107,47 @@ MIDDLEWARE = [
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
+    'formatters': {
+        'django.server': {
+            'format': '[%(server_time)s] %(message)s',
+        },
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+            'style': '{',
+            'datefmt': '%Y-%m-%d %H:%M:%S',
+        },
+        'simple': {
+            'format': '{levelname} {message}',
+            'style': '{',
+        },
+    },
     'handlers': {
         'console': {
             'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+        'django.server': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'django.server',
         },
     },
-    'root': {
-        'handlers': ['console'],
-        'level': 'INFO',
-    },
     'loggers': {
-        'goscholar': {
+        'django': {
             'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+        'django.server': {
+            'handlers': ['django.server'],
             'level': 'INFO',
             'propagate': False,
         },
-    },
+        'goscholar': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+    }
 }
 
 ROOT_URLCONF = "scholar_profile.urls"

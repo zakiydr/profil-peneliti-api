@@ -1,19 +1,23 @@
 import random
-import requests
 import time
 import json
+import requests
 import logging
-from functools import wraps
-
-from scholarly import scholarly, ProxyGenerator
-from fp.fp import FreeProxy
+import threading
+from threading import local
 
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
-from django.core import serializers
 
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
+
+from scholarly import scholarly, ProxyGenerator
+from scholarly._proxy_generator import MaxTriesExceededException, DOSException # Import specific exceptions
+
+# Import our custom proxy manager
+# from .proxy_decorator import direct_proxy_rotation
+# from .proxy_rotator import proxy_rotator 
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -24,61 +28,63 @@ DEFAULT_PAGE = 1
 MAX_AUTHORS = 50
 MAX_PUBLICATIONS = 50
 MAX_CITATIONS = 100
-MAX_PROXY_ATTEMPTS = 5
-
-# Utility functions
-def add_random_delay(min_sec=0.5, max_sec=2.0):
-    """
-    Add a random delay to mimic human behavior and avoid rate limiting.
-    
-    Args:
-        min_sec (float): Minimum delay in seconds
-        max_sec (float): Maximum delay in seconds
-    """
-    time.sleep(random.uniform(min_sec, max_sec))
 
 # API Views
-@api_view(['POST'])
-def set_free_proxies(request):
-    """
-    Set free proxies for scholarly requests.
+# @api_view(['POST'])
+# def refresh_proxies(request):
+#     """
+#     Manually refresh the proxy list.
     
-    Attempts to set up a working proxy from free sources.
-    Returns a success message if successful, or an error response if not.
-    """
-    try:
-        attempts = 0
-        
-        while attempts < MAX_PROXY_ATTEMPTS:
-            pg = ProxyGenerator()
-            proxy_is_set = pg.FreeProxies()
+#     Returns a success message if successful, or an error response if not.
+#     """
+#     try:
+        # if DirectProxyManager.refresh_proxies():
+#             return Response(
+#                 {"success": True, "message": "Proxy list refreshed successfully!"}, 
+#                 status=status.HTTP_200_OK
+#             )
+#         else:
+#             return Response(
+#                 {"success": False, "message": "Failed to refresh proxy list."}, 
+#                 status=status.HTTP_503_SERVICE_UNAVAILABLE
+#             )
             
-            if proxy_is_set:
-                scholarly.use_proxy(pg)
-                logger.info("New proxies successfully set")
-                return Response(
-                    {"success": True, "message": "New proxies are set!"}, 
-                    status=status.HTTP_200_OK
-                )
+#     except Exception as e:
+#         logger.exception("Error refreshing proxies")
+#         return Response(
+#             {"success": False, "error": str(e)}, 
+#             status=status.HTTP_500_INTERNAL_SERVER_ERROR
+#         )
+
+# @api_view(['POST'])
+# def rotate_proxy(request):
+#     """
+#     Manually rotate to the next proxy.
+    
+#     Returns a success message if successful, or an error response if not.
+#     """
+#     try:
+        # if DirectProxyManager.rotate_proxy():
+            # current_proxy = DirectProxyManager.get_current_proxy()
+#             return Response(
+#                 {"success": True, "message": f"Rotated to proxy: {current_proxy}"}, 
+#                 status=status.HTTP_200_OK
+#             )
+#         else:
+#             return Response(
+#                 {"success": False, "message": "Failed to rotate proxy."}, 
+#                 status=status.HTTP_503_SERVICE_UNAVAILABLE
+#             )
             
-            attempts += 1
-            add_random_delay(0.5, 1.5)
-        
-        logger.error("Failed to set proxies after multiple attempts")
-        return Response(
-            {"success": False, "message": "Failed to set proxies after multiple attempts."}, 
-            status=status.HTTP_503_SERVICE_UNAVAILABLE
-        )
-            
-    except Exception as e:
-        logger.exception("Error setting free proxies")
-        return Response(
-            {"success": False, "error": str(e)}, 
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+#     except Exception as e:
+#         logger.exception("Error rotating proxy")
+#         return Response(
+#             {"success": False, "error": str(e)}, 
+#             status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        # )
 
 @api_view(['GET'])
-# @rotate_proxy_decorator
+# @direct_proxy_rotation
 def get_authors(request):
     """
     Search for authors by name with pagination.
@@ -113,55 +119,46 @@ def get_authors(request):
             status=status.HTTP_400_BAD_REQUEST
         )
         
+    # Perform author search
+    search_query = scholarly.search_author(author_name)
+    
+    authors = []
+    for author in search_query:
+        authors.append(author)
+        if len(authors) >= limit * page:
+            break
+        # DirectProxyManager.add_random_delay(0.5, 2.0)
+
+    # Handle pagination
+    paginator = Paginator(authors, limit)
+
     try:
-        # Perform author search
-        search_query = scholarly.search_author(author_name)
-        
-        authors = []
-        for author in search_query:
-            authors.append(author)
-            if len(authors) >= limit * page:
-                break
-            add_random_delay(0.5, 2.0)
+        current_page = paginator.page(page)
+    except PageNotAnInteger:
+        current_page = paginator.page(1)
+    except EmptyPage:
+        if paginator.num_pages > 0:
+            current_page = paginator.page(paginator.num_pages)
+        else:
+            return Response(
+                {"error": "No results found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
 
-        # Handle pagination
-        paginator = Paginator(authors, limit)
-
-        try:
-            current_page = paginator.page(page)
-        except PageNotAnInteger:
-            current_page = paginator.page(1)
-        except EmptyPage:
-            if paginator.num_pages > 0:
-                current_page = paginator.page(paginator.num_pages)
-            else:
-                return Response(
-                    {"error": "No results found"},
-                    status=status.HTTP_404_NOT_FOUND
-                )
-
-        # Prepare response
-        response_data = {
-            "count": len(authors),
-            "total_pages": paginator.num_pages,
-            "current_page": page,
-            "next_page": current_page.next_page_number() if current_page.has_next() else None,
-            "previous_page": current_page.previous_page_number() if current_page.has_previous() else None,
-            "authors": current_page.object_list
-        }
-        
-        # Use standard JSON serialization directly in Response
-        return Response(response_data, status=status.HTTP_200_OK)
-
-    except Exception as e:
-        logger.exception(f"Error retrieving authors: {str(e)}")
-        return Response(
-            {'error': f"Failed to retrieve authors: {str(e)}"}, 
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+    # Prepare response
+    response_data = {
+        "count": len(authors),
+        "total_pages": paginator.num_pages,
+        "current_page": page,
+        "next_page": current_page.next_page_number() if current_page.has_next() else None,
+        "previous_page": current_page.previous_page_number() if current_page.has_previous() else None,
+        "authors": current_page.object_list
+    }
+    
+    return Response(response_data, status=status.HTTP_200_OK)
         
 @api_view(['GET'])
-# @rotate_proxy_decorator
+# @direct_proxy_rotation
 def get_authors_compact(request):
     """
     Get a compact list of authors by name (limited to 10 results).
@@ -172,83 +169,147 @@ def get_authors_compact(request):
     Returns:
         Response: List of authors
     """
-    try:
-        author_name = request.GET.get('author')
+    author_name = request.GET.get('author')
 
-        if not author_name:
-            return Response(
-                {"error": "Author parameter is required"}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        search_query = scholarly.search_author(author_name)
-
-        authors = []
-        for author in search_query:
-            authors.append(author)
-            if len(authors) >= 10:
-                break
-            add_random_delay(0.5, 1.5)
-
-        if not authors:
-            return Response(
-                {"message": "No authors found matching the search criteria"}, 
-                status=status.HTTP_404_NOT_FOUND
-            )
-
-        response_data = {"authors": authors}
-        return Response(response_data, status=status.HTTP_200_OK)
-
-    except Exception as e:
-        logger.exception(f"Error retrieving compact author list: {str(e)}")
+    if not author_name:
         return Response(
-            {'error': f"Failed to retrieve authors: {str(e)}"}, 
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            {"error": "Author parameter is required"}, 
+            status=status.HTTP_400_BAD_REQUEST
         )
+
+    search_query = scholarly.search_author(author_name)
+
+    authors = []
+    for author in search_query:
+        authors.append(author)
+        if len(authors) >= 10:
+            break
+        # DirectProxyManager.add_random_delay(0.5, 1.5)
+
+    if not authors:
+        return Response(
+            {"message": "No authors found matching the search criteria"}, 
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    response_data = {"authors": authors}
+    return Response(response_data, status=status.HTTP_200_OK)
         
-@api_view(['GET'])
-# @rotate_proxy_decorator
+@api_view()
 def get_author_by_name(request):
     """
     Get detailed information for a single author by name.
     
     Query Parameters:
         author (str): Name of the author to search
-        
     Returns:
         Response: Detailed author information
     """
+    author_name = request.GET.get('author')
+    if not author_name:
+        return Response(
+            {"error": "Author parameter is required"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # Fetch an HTTP proxy list
+    # IMPORTANT: Change this URL to the actual URL of an HTTP proxy list
+    http_proxy_list_url = 'https://raw.githubusercontent.com/monosans/proxy-list/refs/heads/main/proxies/http.txt' # EXAMPLE URL
+    proxies = []
     try:
-        author = request.GET.get('author')
+        response = requests.get(http_proxy_list_url, timeout=10)
+        if response.status_code == 200:
+            # Assuming format is host:port
+            proxies = [line.strip() for line in response.text.split('\n') if line.strip() and ':' in line]
+            logger.info(f"Successfully fetched {len(proxies)} HTTP proxies.")
+        else:
+            logger.warning(f"Failed to fetch HTTP proxy list: {response.status_code}")
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error fetching HTTP proxy list: {e}")
 
-        if not author:
-            return Response(
-                {"error": "Author parameter is required"}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
+    pg = ProxyGenerator()
+    proxy_configured = False
+    current_proxy_url = "None"
 
-        search_query = scholarly.search_author(author)
+    if proxies:
+        selected_proxy = random.choice(proxies)
+        # Format as an HTTP proxy URL
+        # Ensure the proxy list provides HTTP proxies, not HTTPS-only proxies for this scheme
+        http_proxy_url = f"http://{selected_proxy}" # Assumes proxies are host:port
+        # If proxies require user/pass: http_proxy_url = f"http://user:pass@{selected_proxy}"
+        current_proxy_url = http_proxy_url
+        logger.info(f"Attempting to use HTTP proxy: {http_proxy_url}")
         
-        try:
-            author_result = next(search_query)
-            result = scholarly.fill(author_result)
-        except StopIteration:
+        # For HTTP proxies, you provide the same URL for both http and https parameters
+        # if the proxy supports tunneling HTTPS requests (most do).
+        # Scholarly/httpx will use the HTTP proxy for HTTPS traffic via the CONNECT method.
+        success = pg.SingleProxy(http=http_proxy_url, https=http_proxy_url) 
+        
+        if success:
+            scholarly.use_proxy(pg, pg) # Force usage
+            logger.info(f"Successfully configured scholarly to use HTTP proxy: {http_proxy_url}")
+            proxy_configured = True
+        else:
+            logger.warning(f"Failed to set up HTTP proxy {http_proxy_url} in ProxyGenerator. Proceeding without proxy.")
+            scholarly.use_proxy(None)
+    else:
+        logger.warning("No HTTP proxies available from the list. Proceeding without proxy.")
+        scholarly.use_proxy(None)
+
+    try:
+        #... (rest of the scholarly search logic as in the previous improved example)...
+        logger.info(f"Searching for author '{author_name}'...")
+        search_query = scholarly.search_author(author_name)
+        author_result = next(search_query, None)
+        
+        if author_result is None:
+            logger.info(f"No author found matching '{author_name}' from initial search.")
             return Response(
-                {"error": "No author found matching the search criteria"}, 
+                {"error": "No author found matching the search criteria"},
                 status=status.HTTP_404_NOT_FOUND
             )
-
-        return Response(result, status=status.HTTP_200_OK)
-
-    except Exception as e:
-        logger.exception(f"Error retrieving author details by name: {str(e)}")
-        return Response(
-            {'error': f"Failed to retrieve author details: {str(e)}"}, 
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )        
         
+        logger.info(f"Found author: {author_result.get('name', 'N/A')}. Filling details...")
+        filled_author = scholarly.fill(author_result)
+        return Response(filled_author, status=status.HTTP_200_OK)
+
+    except MaxTriesExceededException as e:
+        logger.error(f"Scholarly MaxTriesExceededException for '{author_name}'. Proxy: {current_proxy_url}. Error: {e}", exc_info=True)
+        return Response(
+            {'error': f"Failed to retrieve author details after multiple tries (MaxTriesExceededException). Google Scholar may be blocking the proxy or IP. Details: {str(e)}"},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE 
+        )
+    except DOSException as e:
+        logger.error(f"Scholarly DOSException for '{author_name}'. Proxy: {http_proxy_list_url if proxy_configured else 'None'}. Error: {e}", exc_info=True)
+        return Response(
+            {'error': f"Failed to retrieve author details due to perceived DOS attack (DOSException). Details: {str(e)}"},
+            status=status.HTTP_429_TOO_MANY_REQUESTS
+        )
+    except StopIteration: # Should be caught by next(search_query, None) check now
+        logger.warning(f"No author found for '{author_name}' (StopIteration).")
+        return Response(
+            {"error": "No author found matching the search criteria"},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    except Exception as e:
+        logger.exception(f"An unexpected error occurred retrieving author details for '{author_name}'. Proxy: {http_proxy_list_url if proxy_configured else 'None'}. Error: {str(e)}")
+        return Response(
+            {'error': f"An unexpected error occurred: {str(e)}"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+    finally:
+        # It's good practice to reset proxy settings if they are global,
+        # especially in a server environment, to avoid interference between requests.
+        # However, scholarly.use_proxy modifies global state within the scholarly module.
+        # If each request sets its own proxy, this might be okay, but be mindful.
+        # For true isolation, you might need to run scholarly operations in separate processes
+        # or use a forked version of scholarly that allows instance-based proxy configuration.
+        # For now, we'll assume each API call reconfigures as needed.
+        pass
+
+                
 @api_view(["GET"])
-# @rotate_proxy_decorator
+# @direct_proxy_rotation
 def get_author_by_id(request, id):
     """
     Get author information by Scholar ID.
@@ -259,31 +320,24 @@ def get_author_by_id(request, id):
     Returns:
         Response: Detailed author information
     """
-    try:
-        if not id:
-            return Response(
-                {"error": "Scholar ID is required"}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        author = scholarly.search_author_id(id)
-        if not author:
-            return Response(
-                {"error": "No author found with the provided ID"}, 
-                status=status.HTTP_404_NOT_FOUND
-            )
-            
-        author_detail = scholarly.fill(author)
-        return Response(author_detail, status=status.HTTP_200_OK) 
-    except Exception as e:
-        logger.exception(f"Error retrieving author by ID {id}: {str(e)}")
+    if not id:
         return Response(
-            {"error": f"Failed to retrieve author: {str(e)}"}, 
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            {"error": "Scholar ID is required"}, 
+            status=status.HTTP_400_BAD_REQUEST
         )
     
+    author = scholarly.search_author_id(id)
+    if not author:
+        return Response(
+            {"error": "No author found with the provided ID"}, 
+            status=status.HTTP_404_NOT_FOUND
+        )
+        
+    author_detail = scholarly.fill(author)
+    return Response(author_detail, status=status.HTTP_200_OK) 
+    
 @api_view(["GET"])
-# @rotate_proxy_decorator
+# @direct_proxy_rotation
 def get_author_detail(request, id):
     """
     Get detailed author information including publications by Scholar ID.
@@ -294,56 +348,49 @@ def get_author_detail(request, id):
     Returns:
         Response: Author information and publications
     """
-    try:
-        if not id:
-            return Response(
-                {"error": "Scholar ID is required"}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        author = scholarly.search_author_id(id)
-        if not author:
-            return Response(
-                {"error": "No author found with the provided ID"}, 
-                status=status.HTTP_404_NOT_FOUND
-            )
-            
-        author_detail = scholarly.fill(author)
-        
-        # Fetch publications with rate limiting
-        publications = []
-        try:
-            pub_generator = scholarly.search_pubs(author['name'])
-            
-            for pub in pub_generator:
-                publications.append(pub)
-                # Add random delay between publication fetches
-                add_random_delay(1.0, 3.0)
-                
-                # Limit the number of publications
-                if len(publications) >= MAX_PUBLICATIONS:
-                    break
-        except Exception as pub_error:
-            logger.warning(f"Error fetching publications: {str(pub_error)}")
-            # Continue with partial results
-        
-        # Combine author details with publications
-        response_data = {
-            'author_info': author_detail,
-            'publications': publications,
-            'publication_count': len(publications)
-        }
-        
-        return Response(response_data, status=status.HTTP_200_OK)
-    except Exception as e:
-        logger.exception(f"Error retrieving author details for ID {id}: {str(e)}")
+    if not id:
         return Response(
-            {"error": f"Failed to retrieve author details: {str(e)}"}, 
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            {"error": "Scholar ID is required"}, 
+            status=status.HTTP_400_BAD_REQUEST
         )
     
+    author = scholarly.search_author_id(id)
+    if not author:
+        return Response(
+            {"error": "No author found with the provided ID"}, 
+            status=status.HTTP_404_NOT_FOUND
+        )
+        
+    author_detail = scholarly.fill(author)
+    
+    # Fetch publications with rate limiting
+    publications = []
+    try:
+        pub_generator = scholarly.search_pubs(author['name'])
+        
+        for pub in pub_generator:
+            publications.append(pub)
+            # Add random delay between publication fetches
+            # DirectProxyManager.add_random_delay(1.0, 3.0)
+            
+            # Limit the number of publications
+            if len(publications) >= MAX_PUBLICATIONS:
+                break
+    except Exception as pub_error:
+        logger.warning(f"Error fetching publications: {str(pub_error)}")
+        # Continue with partial results
+    
+    # Combine author details with publications
+    response_data = {
+        'author_info': author_detail,
+        'publications': publications,
+        'publication_count': len(publications)
+    }
+    
+    return Response(response_data, status=status.HTTP_200_OK)
+    
 @api_view(["GET"])
-# @rotate_proxy_decorator
+# @direct_proxy_rotation
 def get_pub_detail(request, query):
     """
     Get detailed information for a publication by search query.
@@ -354,38 +401,30 @@ def get_pub_detail(request, query):
     Returns:
         Response: Publication details
     """
-    try:
-        if not query:
-            return Response(
-                {"error": "Publication query is required"}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-            
-        pub_query = scholarly.search_pubs(query)
-        
-        try:
-            pub = next(pub_query)
-            # Add delay to mimic human behavior
-            add_random_delay(1.0, 2.0)
-            
-            # Fill publication details
-            pub_detail = scholarly.fill(pub)
-            return Response(pub, status=status.HTTP_200_OK)
-        except StopIteration:
-            return Response(
-                {"error": "No publications found matching the query"}, 
-                status=status.HTTP_404_NOT_FOUND
-            )
-            
-    except Exception as e:
-        logger.exception(f"Error retrieving publication details for query '{query}': {str(e)}")
+    if not query:
         return Response(
-            {"error": f"Failed to retrieve publication details: {str(e)}"}, 
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            {"error": "Publication query is required"}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
+        
+    pub_query = scholarly.search_pubs(query)
+    
+    try:
+        pub = next(pub_query)
+        # Add delay to mimic human behavior
+        # DirectProxyManager.add_random_delay(1.0, 2.0)
+        
+        # Fill publication details
+        pub_detail = scholarly.fill(pub)
+        return Response(pub_detail, status=status.HTTP_200_OK)
+    except StopIteration:
+        return Response(
+            {"error": "No publications found matching the query"}, 
+            status=status.HTTP_404_NOT_FOUND
         )
 
 @api_view(["GET"])
-# @rotate_proxy_decorator
+# @direct_proxy_rotation
 def get_pub_detail_with_citations(request, query):
     """
     Get detailed information for a publication with its citations.
@@ -396,75 +435,68 @@ def get_pub_detail_with_citations(request, query):
     Returns:
         Response: Publication details with citations
     """
-    try:
-        if not query:
-            return Response(
-                {"error": "Publication query is required"}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-            
-        # Search for publications matching the query
-        pub_query = scholarly.search_pubs(query)
-        
-        # Get the first publication from the search results
-        try:
-            pub = next(pub_query)
-        except StopIteration:
-            return Response(
-                {"error": "No publications found matching the query"}, 
-                status=status.HTTP_404_NOT_FOUND
-            )
-            
-        # Fill in the details of the publication
-        pub_detail = scholarly.fill(pub)
-        
-        # Retrieve publications that have cited the publication with rate limiting
-        citations = []
-        citations_by_year = {}
-        
-        try:
-            citations_generator = scholarly.citedby(pub_detail)
-            
-            # Process each citing publication and fill in details
-            for citation in citations_generator:
-                # Add random delay between citation fetches
-                add_random_delay(1.5, 3.0)
-                
-                try:
-                    filled_citation = scholarly.fill(citation)
-                    citations.append(filled_citation)
-                    
-                    # Group by year if available
-                    year = filled_citation.get("bib", {}).get("pub_year")
-                    if year:
-                        citations_by_year.setdefault(year, []).append(filled_citation)
-                except Exception as citation_error:
-                    # Log the error but continue with other citations
-                    logger.warning(f"Error fetching citation details: {str(citation_error)}")
-                
-                # Limit the number of citations
-                if len(citations) >= MAX_CITATIONS:
-                    break
-                    
-        except Exception as e:
-            logger.warning(f"Error fetching citations: {str(e)}")
-            # Continue with partial results
-        
-        # Sort the dictionary by year
-        sorted_citations_by_year = {year: citations_by_year[year] 
-                                   for year in sorted(citations_by_year.keys())}
-        
-        # Construct the response data
-        result = {
-            "publication_details": pub_detail,
-            "citations_by_year": sorted_citations_by_year,
-            "total_citations": len(citations)
-        }
-        
-        return Response(result, status=status.HTTP_200_OK)
-    except Exception as e:
-        logger.exception(f"Error retrieving publication details with citations for query '{query}': {str(e)}")
+    if not query:
         return Response(
-            {"error": f"Failed to retrieve publication citations: {str(e)}"}, 
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            {"error": "Publication query is required"}, 
+            status=status.HTTP_400_BAD_REQUEST
         )
+        
+    # Search for publications matching the query
+    pub_query = scholarly.search_pubs(query)
+    
+    # Get the first publication from the search results
+    try:
+        pub = next(pub_query)
+    except StopIteration:
+        return Response(
+            {"error": "No publications found matching the query"}, 
+            status=status.HTTP_404_NOT_FOUND
+        )
+        
+    # Fill in the details of the publication
+    pub_detail = scholarly.fill(pub)
+    
+    # Retrieve publications that have cited the publication with rate limiting
+    citations = []
+    citations_by_year = {}
+    
+    try:
+        citations_generator = scholarly.citedby(pub_detail)
+        
+        # Process each citing publication and fill in details
+        for citation in citations_generator:
+            # Add random delay between citation fetches
+            # DirectProxyManager.add_random_delay(1.5, 3.0)
+            
+            try:
+                filled_citation = scholarly.fill(citation)
+                citations.append(filled_citation)
+                
+                # Group by year if available
+                year = filled_citation.get("bib", {}).get("pub_year")
+                if year:
+                    citations_by_year.setdefault(year, []).append(filled_citation)
+            except Exception as citation_error:
+                # Log the error but continue with other citations
+                logger.warning(f"Error fetching citation details: {str(citation_error)}")
+            
+            # Limit the number of citations
+            if len(citations) >= MAX_CITATIONS:
+                break
+                
+    except Exception as e:
+        logger.warning(f"Error fetching citations: {str(e)}")
+        # Continue with partial results
+    
+    # Sort the dictionary by year
+    sorted_citations_by_year = {year: citations_by_year[year] 
+                               for year in sorted(citations_by_year.keys())}
+    
+    # Construct the response data
+    result = {
+        "publication_details": pub_detail,
+        "citations_by_year": sorted_citations_by_year,
+        "total_citations": len(citations)
+    }
+    
+    return Response(result, status=status.HTTP_200_OK)

@@ -196,12 +196,9 @@ def get_author_by_name(request):
             {"error": "Author parameter is required"},
             status=status.HTTP_400_BAD_REQUEST
         )
-
+        
     # Setup proxy
-    if not setup_rayobyte_proxy():
-        logger.warning("Proxy setup failed, attempting without proxy...")
-        # Optionally try without proxy as fallback
-        # scholarly.use_proxy(None)
+    setup_rayobyte_proxy()
 
     try:
         logger.info(f"Searching for author '{author_name}'...")
@@ -230,10 +227,7 @@ def get_author_by_name(request):
             )
 
         logger.info(f"Found author: {author_result.get('name', 'N/A')}. Filling details...")
-        
-        # Add delay before filling details
-        add_random_delay()
-        
+            
         # Fill author details with retry logic
         for attempt in range(max_retries):
             try:

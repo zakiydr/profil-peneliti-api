@@ -3,6 +3,7 @@ import time
 import json
 import requests
 import logging
+import os
 import threading
 from threading import local
 
@@ -29,59 +30,47 @@ MAX_AUTHORS = 50
 MAX_PUBLICATIONS = 50
 MAX_CITATIONS = 100
 
-# API Views
-# @api_view(['POST'])
-# def refresh_proxies(request):
-#     """
-#     Manually refresh the proxy list.
-    
-#     Returns a success message if successful, or an error response if not.
-#     """
-#     try:
-        # if DirectProxyManager.refresh_proxies():
-#             return Response(
-#                 {"success": True, "message": "Proxy list refreshed successfully!"}, 
-#                 status=status.HTTP_200_OK
-#             )
-#         else:
-#             return Response(
-#                 {"success": False, "message": "Failed to refresh proxy list."}, 
-#                 status=status.HTTP_503_SERVICE_UNAVAILABLE
-#             )
-            
-#     except Exception as e:
-#         logger.exception("Error refreshing proxies")
-#         return Response(
-#             {"success": False, "error": str(e)}, 
-#             status=status.HTTP_500_INTERNAL_SERVER_ERROR
-#         )
+# --- Helper function to setup a proxy from the GitHub list ---
+def setup_rayobyte_proxy():
+    """
+    Configures scholarly to use your specific Rayobyte residential proxy credentials.
+    Returns True on success, False on failure.
+    """
+    # IMPORTANT: For production, move these to environment variables or Django settings.
+    proxy_user = os.getenv("RAYOBYTE_USER", "zakinomercy_gmail_com")
+    proxy_pass = os.getenv("RAYOBYTE_PASS", "carpediem")
+    proxy_host = os.getenv("RAYOBYTE_HOST", "la.residential.rayobyte.com")
+    proxy_port = os.getenv("RAYOBYTE_PORT", "8000")
 
-# @api_view(['POST'])
-# def rotate_proxy(request):
-#     """
-#     Manually rotate to the next proxy.
+    if not all([proxy_user, proxy_pass, proxy_host]):
+        logger.error("Rayobyte proxy credentials are not fully configured.")
+        return False
+        
+    # Construct the full proxy URL - fixed format
+    proxy_url = f"http://{proxy_user}:{proxy_pass}@{proxy_host}:{proxy_port}"
     
-#     Returns a success message if successful, or an error response if not.
-#     """
-#     try:
-        # if DirectProxyManager.rotate_proxy():
-            # current_proxy = DirectProxyManager.get_current_proxy()
-#             return Response(
-#                 {"success": True, "message": f"Rotated to proxy: {current_proxy}"}, 
-#                 status=status.HTTP_200_OK
-#             )
-#         else:
-#             return Response(
-#                 {"success": False, "message": "Failed to rotate proxy."}, 
-#                 status=status.HTTP_503_SERVICE_UNAVAILABLE
-#             )
+    logger.info(f"Attempting to use Rayobyte proxy at {proxy_host}:{proxy_port}")
+
+    try:
+        pg = ProxyGenerator()
+        
+        # Use the correct method name and parameters
+        pg.SingleProxy(http=proxy_url, https=proxy_url)
+        
+        # Configure scholarly with the proxy
+        scholarly.use_proxy(pg)
+        
+        # Test the proxy with a simple query
+        test_query = scholarly.search_author("test")
+        
+        logger.info("Scholarly successfully configured with Rayobyte proxy.")
+        return True
             
-#     except Exception as e:
-#         logger.exception("Error rotating proxy")
-#         return Response(
-#             {"success": False, "error": str(e)}, 
-#             status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        # )
+    except Exception as e:
+        logger.error(f"Proxy setup failed: {e}", exc_info=True)
+        return False
+
+
 
 @api_view(['GET'])
 # @direct_proxy_rotation
@@ -194,9 +183,118 @@ def get_authors_compact(request):
 
     response_data = {"authors": authors}
     return Response(response_data, status=status.HTTP_200_OK)
-        
-@api_view()
+
+@api_view(["GET"])
 def get_author_by_name(request):
+    """
+    Get detailed information for a single author by name.
+    Enhanced with better error handling and anti-detection measures.
+    """
+    author_name = request.GET.get('author')
+    if not author_name:
+        return Response(
+            {"error": "Author parameter is required"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # Setup proxy
+    if not setup_rayobyte_proxy():
+        logger.warning("Proxy setup failed, attempting without proxy...")
+        # Optionally try without proxy as fallback
+        # scholarly.use_proxy(None)
+
+    try:
+        logger.info(f"Searching for author '{author_name}'...")
+        
+        # # Add delay before search
+        # add_random_delay()
+        
+        # Perform search with retry logic
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                search_query = scholarly.search_author(author_name)
+                author_result = next(search_query, None)
+                break
+            except Exception as e:
+                if attempt == max_retries - 1:
+                    raise e
+                logger.warning(f"Search attempt {attempt + 1} failed, retrying...")
+                time.sleep(random.uniform(2, 5))
+
+        if author_result is None:
+            logger.warning(f"No author found for '{author_name}'")
+            return Response(
+                {"error": "No author found matching the search criteria"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        logger.info(f"Found author: {author_result.get('name', 'N/A')}. Filling details...")
+        
+        # Add delay before filling details
+        add_random_delay()
+        
+        # Fill author details with retry logic
+        for attempt in range(max_retries):
+            try:
+                filled_author = scholarly.fill(author_result)
+                break
+            except Exception as e:
+                if attempt == max_retries - 1:
+                    raise e
+                logger.warning(f"Fill attempt {attempt + 1} failed, retrying...")
+                time.sleep(random.uniform(3, 7))
+        
+        # Clean up sensitive data before returning
+        response_data = dict(filled_author)
+        
+        return Response(response_data, status=status.HTTP_200_OK)
+
+    except MaxTriesExceededException:
+        logger.error("MaxTriesExceededException: Requests are being blocked by Google")
+        return Response(
+            {"error": "Request blocked by Google. Please try again later or check proxy configuration."},
+            status=status.HTTP_429_TOO_MANY_REQUESTS
+        )
+    
+    except Exception as e:
+        error_msg = str(e).lower()
+        
+        # Handle specific HTTP errors
+        if "403" in error_msg or "forbidden" in error_msg:
+            logger.error("HTTP 403: Access forbidden by Google")
+            return Response(
+                {"error": "Access forbidden. Google may be blocking requests. Try again later."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        elif "429" in error_msg or "too many requests" in error_msg:
+            logger.error("HTTP 429: Too many requests")
+            return Response(
+                {"error": "Rate limit exceeded. Please wait before making another request."},
+                status=status.HTTP_429_TOO_MANY_REQUESTS
+            )
+        elif "timeout" in error_msg:
+            logger.error("Request timeout")
+            return Response(
+                {"error": "Request timed out. Please try again."},
+                status=status.HTTP_408_REQUEST_TIMEOUT
+            )
+        else:
+            logger.exception(f"Unexpected error for author '{author_name}'")
+            return Response(
+                {'error': f"An unexpected error occurred: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    finally:
+        # Always clean up proxy settings
+        try:
+            scholarly.use_proxy(None)
+        except:
+            pass
+
+@api_view()
+def get_author_by_name_with_proxy(request):
     """
     Get detailed information for a single author by name.
     
